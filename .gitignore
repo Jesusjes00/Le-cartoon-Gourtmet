@@ -1,0 +1,6 @@
+# Compilados de Maven
+target/
+*.class
+
+# Archivos que genera la app
+texto.txt
