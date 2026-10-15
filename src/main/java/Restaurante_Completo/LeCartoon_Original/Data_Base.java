@@ -6,6 +6,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.sql.Statement;
 
 import javax.swing.JOptionPane;
 
@@ -260,46 +261,24 @@ public class Data_Base {
 	}
 	
 	
-	public void insertOrder(double price) {		
-		int LastId = 0;
-		String sql = "SELECT * FROM ORDERS ORDER BY ID DESC LIMIT 1";
-		
-		try {
-			PreparedStatement insert = connect.prepareStatement(sql);
-			ResultSet result = insert.executeQuery();
-			if(result.next()) {
-				LastId = result.getInt("ID");
-				
-				sql = "Insert into ORDERS (ID, COSTUMER, PRICE, STATE) VALUES (?, ?, ?, ?)";
-				insert = connect.prepareStatement(sql);
-				insert.setInt(1, (LastId+1));
-				insert.setInt(2, Restaurant.getCostumer().getId());
-				insert.setDouble(3, price);
-				insert.setInt(4, 1);
-				
-				insert.executeUpdate();
-				insert.close();
-				System.out.println("se metio el pedido a la base de datos");
-			}else {
-				sql = "Insert into ORDERS (ID, COSTUMER, PRICE, STATE) VALUES (?, ?, ?, ?)";
-				
-				insert.setInt(1, 1);
-				insert.setInt(2, Restaurant.getCostumer().getId());
-				insert.setDouble(3, price);
-				insert.setInt(4, 1);
-				
-				insert.executeUpdate();
-				insert.close();
-				System.out.println("se metio el pedido a la base de datos");
+	
+	public int insertOrder(int customerId,double price)throws SQLException {
+		String sql = "INSERT INTO ORDERS (COSTUMER, PRICE , STATE) VALUES (?,?,?)";
+		try (PreparedStatement insert =
+				connect.prepareStatement(sql,Statement.RETURN_GENERATED_KEYS)){
+			insert.setInt(1, customerId);
+			insert.setDouble(2, price);
+			insert.setInt(3,1);
+			insert.executeUpdate();
+			try(ResultSet keys = insert.getGeneratedKeys()){
+				if (keys.next()) return keys.getInt(1);
 			}
-			
-			
-			
-		} catch (SQLException e) {
-			// TODO Auto-generated catch block
-			JOptionPane.showMessageDialog(null, "Hubo un error");
+		
 		}
+		throw new SQLException("No se obtuvo el id del pedido");
+
 	}
+	
 	
 	public void insertOrderDetails(ArrayList<ItemPedido> listaPedidos) {
 		//Conocer ultimo índice
