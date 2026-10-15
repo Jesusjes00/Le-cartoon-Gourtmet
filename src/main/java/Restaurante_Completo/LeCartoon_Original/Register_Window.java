@@ -35,7 +35,7 @@ public class Register_Window {
 	// Variables parra permitir el movimento
 	private int mouseX, mouseY;
 
-	public static void main(String[] args) {
+	/*public static void main(String[] args) {
 		EventQueue.invokeLater(new Runnable() {
 			public void run() {
 				try {
@@ -46,7 +46,7 @@ public class Register_Window {
 				}
 			}
 		});
-	}
+	}*/
 
 	public Register_Window() {
 		initialize();
