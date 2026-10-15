@@ -168,7 +168,7 @@ public class CartPanel extends JPanel {
 					try {
 					    int id = Restaurant.registrarPedido(total + 18.5, listaPedidos);
 					    JOptionPane.showMessageDialog(null, "Tu pedido #" + id + " fue realizado");
-					    Carrito.setListaPedidos();
+					    Carrito.vaciar();
 					    Main_Frame.changeDynamicPanel(new MainFramePanel());
 					} catch (SQLException ex) {
 					    ex.printStackTrace();
