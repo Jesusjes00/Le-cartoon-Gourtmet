@@ -12,6 +12,7 @@ import java.awt.geom.RoundRectangle2D;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.sql.SQLException;
 
 public class CartPanel extends JPanel {
 	private ArrayList<ItemPedido> listaPedidos;
@@ -164,11 +165,15 @@ public class CartPanel extends JPanel {
         btnRealizarPedido.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {	
 				if(listaPedidos.size() != 0) {
-					Restaurant.insertOrder((total+18.5));
-					Restaurant.insertOrderDetails(listaPedidos);
-					JOptionPane.showMessageDialog(null, "Tu pedido fue realizado");		
-					Carrito.setListaPedidos();
-					Main_Frame.changeDynamicPanel( new MainFramePanel());
+					try {
+					    int id = Restaurant.registrarPedido(total + 18.5, listaPedidos);
+					    JOptionPane.showMessageDialog(null, "Tu pedido #" + id + " fue realizado");
+					    Carrito.setListaPedidos();
+					    Main_Frame.changeDynamicPanel(new MainFramePanel());
+					} catch (SQLException ex) {
+					    ex.printStackTrace();
+					    JOptionPane.showMessageDialog(null, "No se pudo registrar tu pedido. Intenta de nuevo.");
+					}
 				}else {
 					JOptionPane.showMessageDialog(null, "No has agregado productos a tu carrito");
 				}

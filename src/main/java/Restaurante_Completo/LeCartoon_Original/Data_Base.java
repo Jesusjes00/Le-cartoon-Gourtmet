@@ -260,9 +260,26 @@ public class Data_Base {
 		
 	}
 	
+	public int registrarPedido(int customerId,double price,
+								ArrayList<ItemPedido>items)throws SQLException{
+		boolean autocommitPrevio = connect.getAutoCommit();
+		connect.setAutoCommit(false); //inicia la transaccion
+		try {
+			int orderId = insertOrder(customerId,price);
+			insertOrderDetails(orderId,items);
+			connect.commit();  //genera un commit
+			return orderId;
+		}catch (SQLException e) {
+			connect.rollback();   //en caso de error genera un rollback
+			throw e;
+		}finally {
+			connect.setAutoCommit(autocommitPrevio); // restablece la conexión
+		}
+	}
 	
 	
-	public int insertOrder(int customerId,double price)throws SQLException {
+	
+	private int insertOrder(int customerId,double price)throws SQLException {
 		String sql = "INSERT INTO ORDERS (COSTUMER, PRICE , STATE) VALUES (?,?,?)";
 		try (PreparedStatement insert =
 				connect.prepareStatement(sql,Statement.RETURN_GENERATED_KEYS)){
@@ -280,41 +297,18 @@ public class Data_Base {
 	}
 	
 	
-	public void insertOrderDetails(ArrayList<ItemPedido> listaPedidos) {
-		//Conocer ultimo índice
-		int LastId = 0;
-		String sql = "SELECT * FROM ORDERSDETAILS ORDER BY IDORDER DESC LIMIT 1";
-		try {
-			PreparedStatement query = connect.prepareStatement(sql);
-			ResultSet result = query.executeQuery();
-			if(result.next()) {
-				LastId = result.getInt("IDORDER");
-				LastId ++;
-				
-				for(ItemPedido order : listaPedidos) {
-					sql = "Insert into ORDERSDETAILS (IDORDER, DISH, QUANTITY) VALUES (?, ?, ?)";
-					
-					try {
-						PreparedStatement insert = connect.prepareStatement(sql);
-						insert.setInt(1, LastId);
-						insert.setInt(2, order.getPlatillo().getId());
-						insert.setInt(3, order.getCantidad());
-						
-						insert.executeUpdate();
-						insert.close();
-						System.out.println("se metio el pedido a la base de datos");
-						
-					} catch (SQLException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-					}
-				}
+	private void insertOrderDetails(int oderId,ArrayList<ItemPedido> items)throws SQLException {
+		String sql = "INSERT INTO ORDERSDETAILS (IDORDER,DISH,QUANTITY) VALUES(?,?,?)";
+		try(PreparedStatement insert = connect.prepareStatement(sql)){
+			for(ItemPedido item:items) {
+				insert.setInt(1, oderId);
+				insert.setInt(2,item.getPlatillo().getId());
+				insert.setInt(3,item.getCantidad());
+				insert.addBatch();
 			}
-						
-		} catch (SQLException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}		
+			insert.executeBatch();
+		}
+		
 				
 	}
 	

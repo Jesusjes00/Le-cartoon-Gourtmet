@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import javax.swing.JOptionPane;
 
 import Restaurante_Completo.LeCartoon_Original.Carrito.ItemPedido;
+import java.sql.SQLException;
 
 public class Restaurant {
 	private static Restaurant rest;
@@ -52,13 +53,9 @@ public class Restaurant {
 	}
 	
 	
-	public static void insertOrder(double price) {
-		DB.insertOrder(price);
-	}
-	
-	public static void insertOrderDetails(ArrayList<ItemPedido> listaPedidos) {
-		DB.insertOrderDetails(listaPedidos);
-	}
+public static int registrarPedido(double price ,ArrayList<ItemPedido>items)throws SQLException{
+	return DB.registrarPedido(getCostumer().getId(),price,items);
+}
 	
 	
 	public void generate_report() {
