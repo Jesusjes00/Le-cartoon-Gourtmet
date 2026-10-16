@@ -1,6 +1,6 @@
 package Restaurante_Completo.LeCartoon_Original;
 import java.sql.Connection;
-import java.sql.DriverManager;
+import persistence.ConnectionFactory;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -16,13 +16,12 @@ public class Data_Base {
 	private  Connection connect = null;
 	
 	private Data_Base() {
-		try {
-			connect = DriverManager.getConnection("jdbc:sqlite:Restaurant.db");
-			
-		}catch(SQLException e) {
-			System.out.println("Error de Conexion");
-		}
-		
+	    try {
+	        connect = ConnectionFactory.getConnection();
+	        System.out.println("Conectado a " + ConnectionFactory.describir());
+	    } catch (SQLException e) {
+	        System.out.println("Error de conexión: " + e.getMessage());
+	    }
 	}
 	
 	public  Costumer login(String email, String password) {
