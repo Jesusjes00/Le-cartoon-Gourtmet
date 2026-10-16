@@ -1,6 +1,9 @@
 package Restaurante_Completo.LeCartoon_Original;
 import java.sql.Connection;
 import persistence.ConnectionFactory;
+import persistence.CustomerDao;
+import persistence.DaoException;
+import persistence.sqlite.SqliteCustomerDao;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -14,6 +17,7 @@ import Restaurante_Completo.LeCartoon_Original.Carrito.ItemPedido;
 public class Data_Base {
 	private  static Data_Base db;
 	private  Connection connect = null;
+	private final CustomerDao clientes = new SqliteCustomerDao();
 	
 	private Data_Base() {
 	    try {
@@ -24,72 +28,25 @@ public class Data_Base {
 	    }
 	}
 	
-	public  Costumer login(String email, String password) {
-		
-		try {
-			
-			String sql = "SELECT * FROM COSTUMERS WHERE EMAIL = ? AND PASSWORD =?";
-			PreparedStatement review = connect.prepareStatement(sql);
-			review.setString(1, email);
-			review.setString(2, password);
-			ResultSet result = review.executeQuery();
-			if(result.next()) {
-				//Obtenemos los datos del cliente
-				int ID = result.getInt("ID");
-				String Name = result.getString("NAME");
-				String Last_Name = result.getString("LASTNAME");
-				String Phone = result.getString("PHONE");
-				String Email = result.getString("EMAIL");
-				String Password = result.getString("PASSWORD");
-				String address = result.getString("ADDRESS");
-				
-				//Creamos al cliente
-				Costumer previus_costumer = new Costumer(ID,Name,Last_Name,Phone,Email,Password, address);
-				System.out.println("El Proceso (1) se completo con exito");
-				result.close();
-				return previus_costumer;
-	
-			}
-			else
-			{
-				result.close();
-				return null;
-			}
-
-		}catch(SQLException e) {
-			System.out.println("Ocurrio un error");
-			e.printStackTrace();
-			return null;
-		}
-		//Por si no cae en el try catch
-			
+	public Costumer login(String email, String password) {
+	    try {
+	        return clientes.login(email, password);
+	    } catch (DaoException e) {
+	        System.err.println("[DAO] " + e.getMessage() + " -> " + e.getCause());
+	        return null;
+	    }
 	}
-	
-	public boolean register(String name , String lastname , String phone ,String email,String password,String address) {
-		
-		try {
-			String sql = "INSERT INTO COSTUMERS (NAME,LASTNAME,PHONE,EMAIL,PASSWORD,ADDRESS) VALUES(?,?,?,?,?,?)";
-			PreparedStatement reg = connect.prepareStatement(sql);
-			reg.setString(1,name);
-			reg.setString(2,lastname);
-			reg.setString(3,phone);
-			reg.setString(4,email);
-			reg.setString(5,password);
-			reg.setString(6,address);			
-			reg.executeUpdate();
-			reg.close();
-			System.out.println("El Usuario fue agregado con exito");
-			return true;
-			
-			
-		}catch(SQLException e) {
-			System.out.println("Ocurrio un Error");
-			e.printStackTrace();
-			return false;
-		}
-		
-
-		
+	public boolean register(String name, String lastname, String phone,
+					String email, String password, String address) {
+					try {
+							Costumer nuevo = new Costumer(name, lastname, phone, email, password, address);
+							int id = clientes.registrar(nuevo);
+							System.out.println("Cliente registrado con id " + id);
+							return true;
+						} catch (DaoException e) {
+							System.err.println("[DAO] " + e.getMessage() + " -> " + e.getCause());
+							return false;
+						}
 	}
 	
 	public void Favorites(int ID , ArrayList<Integer> favorites) {
@@ -197,30 +154,13 @@ public class Data_Base {
 	
 	//Método para editar el perfil del usuario en la base de datos
 	public void editProfile(Costumer costumer) {
-		//La idea de recibir El cliente en la función es para que durante el runningtime en usuario se encuentra
-		//En la pestaña de perfil, se le piden los datos a cambiar y se cambian desde la propia pantalla del perfil 
-		//Entonces se manda el perfil ya cambiado, sólo es cuestión de actualizarlo en la base de datos
-		String sql = "Update COSTUMERS Set NAME = ?, LASTNAME = ?, PHONE = ? Where ID = ? ";
-		
-		try {
-			PreparedStatement update = connect.prepareStatement(sql);
-			update.setString(1, costumer.getName());
-			update.setString(2, costumer.getLastName());
-			update.setString(3, costumer.getPhone());
-			update.setInt(4, costumer.getId());
-			
-			update.executeUpdate();
-			JOptionPane.showMessageDialog(null, "Se actualizó correctamente su perfil");
-			
-			update.close();
-			
-		} catch (SQLException e) {
-			// TODO Auto-generated catch block
-			System.out.println("*Hubo un error de actualización*");
-			JOptionPane.showMessageDialog(null, "Hubo un error de actualización");
-		}
-		
-		
+	    try {
+	        clientes.actualizarPerfil(costumer);
+	        JOptionPane.showMessageDialog(null, "Se actualizó correctamente su perfil");
+	    } catch (DaoException e) {
+	        System.err.println("[DAO] " + e.getMessage() + " -> " + e.getCause());
+	        JOptionPane.showMessageDialog(null, "Hubo un error de actualización");
+	    }
 	}
 	
 	//Método para conocer una comida a partir de un id
