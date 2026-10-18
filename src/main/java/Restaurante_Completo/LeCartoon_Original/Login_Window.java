@@ -23,6 +23,8 @@ import javax.swing.border.LineBorder;
 import java.awt.Font;
 import java.awt.TextField;
 import java.awt.SystemColor;
+import javax.swing.JOptionPane;
+import persistence.DaoException;
 
 public class Login_Window {
 
@@ -282,26 +284,25 @@ public class Login_Window {
 							txtpass.setBorder(new CompoundBorder(new LineBorder(Color.RED, 1, true), new EmptyBorder(0, 10, 0, 10)));
 						} else {
 							//Procedemos a meter la base de datos
-							//Checamos la Data_Base:
-							Data_Base DB = Data_Base.getInstance();
-							Costumer Previus_Costumer = DB.login(user, password_prev);
-							//Validamos al costumer
-							if(Previus_Costumer != null) {
-								
-								// Abriimos la pantalla principal
-								Restaurant.changeCostumer(Previus_Costumer);
-								
-								Main_Frame principal_window = new Main_Frame();
-								principal_window.showmainframe(true,Previus_Costumer);
-								// Ocultamos la ventana de login actual y liberamos recursos
-								frame.dispose(); 
-							}else {
-								
-								wrong.setForeground(Color.RED);
-								txtEmail.setBorder(new CompoundBorder(new LineBorder(Color.RED, 1, true), new EmptyBorder(0, 10, 0, 10)));
-								txtpass.setBorder(new CompoundBorder(new LineBorder(Color.RED, 1, true), new EmptyBorder(0, 10, 0, 10)));
-								System.out.println("Hubo un error;");
+							Costumer cliente;
+							try {
+							    cliente = Restaurant.getInstance().login(user, password_prev);
+							} catch (DaoException ex) {
+							    System.err.println("[DAO] " + ex.getMessage() + " -> " + ex.getCause());
+							    JOptionPane.showMessageDialog(frame, "No hay conexión con la base de datos. Intenta de nuevo.");
+							    return;
 							}
+
+							if (cliente != null) {
+							    Main_Frame principal_window = new Main_Frame();
+							    principal_window.showmainframe(true, cliente);
+							    frame.dispose();
+							} else {
+							    wrong.setForeground(Color.RED);
+							    txtEmail.setBorder(new CompoundBorder(new LineBorder(Color.RED, 1, true), new EmptyBorder(0, 10, 0, 10)));
+							    txtpass.setBorder(new CompoundBorder(new LineBorder(Color.RED, 1, true), new EmptyBorder(0, 10, 0, 10)));
+							}
+							
 						}
 					});
 					RightPanel.add(loginbutton);

@@ -175,7 +175,7 @@ public class CartPanel extends JPanel {
         panelResumen.add(Box.createVerticalStrut(24));
 
         // Dirección de entrega
-        panelResumen.add(crearInfoBox("📦", "DIRECCIÓN DE ENTREGA", Restaurant.getCostumer().getAddress()));
+        panelResumen.add(crearInfoBox("📦", "DIRECCIÓN DE ENTREGA", Restaurant.getInstance().getCliente().getAddress()));
         panelResumen.add(Box.createVerticalStrut(10));
 
         // Método de pago
@@ -188,7 +188,7 @@ public class CartPanel extends JPanel {
 			public void actionPerformed(ActionEvent e) {	
 				if(listaPedidos.size() != 0) {
 					try {
-					    int id = Restaurant.registrarPedido(total + 18.5, listaPedidos);
+						int id = Restaurant.getInstance().registrarPedido(total + 18.5, listaPedidos);
 					    JOptionPane.showMessageDialog(null, "Tu pedido #" + id + " fue realizado");
 					    Carrito.vaciar();
 					    Main_Frame.changeDynamicPanel(new MainFramePanel());

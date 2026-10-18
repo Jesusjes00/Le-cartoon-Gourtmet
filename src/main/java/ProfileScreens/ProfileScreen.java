@@ -14,7 +14,6 @@ import javax.swing.SwingUtilities;
 
 import Restaurante_Completo.LeCartoon_Original.Buttons;
 import Restaurante_Completo.LeCartoon_Original.Costumer;
-import Restaurante_Completo.LeCartoon_Original.Data_Base;
 import Restaurante_Completo.LeCartoon_Original.Login_Window;
 import Restaurante_Completo.LeCartoon_Original.Main_Frame;
 import Restaurante_Completo.LeCartoon_Original.Order;
@@ -42,6 +41,8 @@ import javax.swing.GroupLayout.Alignment;
 import java.awt.event.ActionListener;
 import java.awt.event.ActionEvent;
 import javax.swing.JSeparator;
+import javax.swing.JOptionPane;
+import persistence.DaoException;
 
 public class ProfileScreen extends JPanel {
 
@@ -57,11 +58,14 @@ public class ProfileScreen extends JPanel {
 	private static JPanel mainPanel;
 	
 	public ProfileScreen() {
-		this.costumer = Restaurant.getCostumer();			
-		orders = Restaurant.getOrders(); // Se guarda la lista de pedidos del cliente		
-		if(orders == null) {
-			orders = new ArrayList<>(); // creo un arraylist nuevo para quitar el estado null y que el size del arraylist sea 0
-		}//ME permite no cambiar la lógica del programa 
+		costumer = Restaurant.getInstance().getCliente();
+		try {
+		    orders = new ArrayList<>(Restaurant.getInstance().misPedidos());
+		} catch (DaoException ex) {
+		    System.err.println("[DAO] " + ex.getMessage() + " -> " + ex.getCause());
+		    JOptionPane.showMessageDialog(null, "No se pudieron cargar tus pedidos");
+		    orders = new ArrayList<>();
+		}
 		
 		
 		setSize(1920, 1000);
@@ -276,9 +280,8 @@ public class ProfileScreen extends JPanel {
 			@Override
 			public void mouseClicked(MouseEvent e) {
 				resetButtons();
-				//Vale verga........................>>>>>>>
-				Restaurant rest = Restaurant.getInstance(costumer);
-				rest.generate_report();
+	
+				Restaurant.getInstance().cerrarSesion();
 				Login_Window log_window = new Login_Window();
 				log_window.showloginframe(true);
 				// Ocultamos la ventana de login actual y liberamos recursos

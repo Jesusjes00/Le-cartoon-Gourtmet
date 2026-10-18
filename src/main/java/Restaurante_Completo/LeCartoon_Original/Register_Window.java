@@ -20,6 +20,8 @@ import javax.swing.SwingConstants;
 import javax.swing.border.CompoundBorder;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
+import javax.swing.JOptionPane;
+import persistence.DaoException;
 
 public class Register_Window {
 
@@ -406,32 +408,17 @@ public class Register_Window {
 			}
 			else
 			{
-				Data_Base DB = Data_Base.getInstance();
-				boolean reg_bo = DB.register(user, lastname_tx, number_prev, Email, password_prev, Add);
-				if(reg_bo) {
-					
-					Costumer Previus_Costumer = DB.login(Email, password_prev);
-					//Validamos al costumer
-					if(Previus_Costumer != null) {
-						Restaurant.changeCostumer(Previus_Costumer);
-						// Abriimos la pantalla principal
-						Main_Frame principal_window = new Main_Frame();
-						principal_window.showmainframe(true,Previus_Costumer);
-						// Ocultamos la ventana de login actual y liberamos recursos
-						frame.dispose(); 
-						}else {
-					
-							System.out.println("Hubo un error;");
-							Login_Window back = new Login_Window();
-							back.showloginframe(true);
-							frame.dispose();
-						}
-					
-				}
-				else {
-					//Cerramos el programa como precaucion
-					frame.dispose(); 
-					
+				try {
+				    Costumer nuevo = new Costumer(user, lastname_tx, number_prev, Email, password_prev, Add);
+				    Costumer cliente = Restaurant.getInstance().registrar(nuevo);
+
+				    Main_Frame principal_window = new Main_Frame();
+				    principal_window.showmainframe(true, cliente);
+				    frame.dispose();
+				} catch (DaoException ex) {
+				    System.err.println("[DAO] " + ex.getMessage() + " -> " + ex.getCause());
+				    JOptionPane.showMessageDialog(frame, "No se pudo crear la cuenta. Revisa tus datos e intenta de nuevo.");
+				    txtemail.setBorder(new CompoundBorder(new LineBorder(Color.RED, 1, true), new EmptyBorder(0, 10, 0, 10)));
 				}
 
 			}

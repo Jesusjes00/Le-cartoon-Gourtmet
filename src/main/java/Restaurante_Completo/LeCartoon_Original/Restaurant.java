@@ -1,128 +1,86 @@
 package Restaurante_Completo.LeCartoon_Original;
 
-import java.io.BufferedWriter;
-import java.io.FileWriter;
-import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 
-import javax.swing.JOptionPane;
 import Restaurante_Completo.LeCartoon_Original.Carrito.ItemPedido;
+import persistence.CustomerDao;
+import persistence.DaoFactory;
+import persistence.OrderDao;
 
 
-public class Restaurant {
-	private static Restaurant rest;
-	private String Name;
-	private static Data_Base DB;
-	private static Costumer costumer; 
-	private static ArrayList<Order> orders;
-	
+public final class Restaurant {
 
-	private Restaurant(Costumer costumer) {
-		super();
-		Name = "Le Cartoon";
-		DB = Data_Base.getInstance();
-		Restaurant.costumer = costumer; 
-		Restaurant.orders = getOrders();
-		
-	}
-	
+    private static final Restaurant INSTANCIA = new Restaurant();
 
-	
-	//Creamos Metodos
-	
-	public Costumer login(String Email , String password ) {
-		Costumer Previus_Costumer=DB.login(Email, password);
-		if (Previus_Costumer == null) {
-			System.out.println("No fue encontrado el cliente");
-			JOptionPane.showMessageDialog(null, "Datos incorrectos, inténtelo de nuevo");
-			return null;
-		}
-		else
-		{
-			System.out.println("Si se encontro el cliente");
-			return Previus_Costumer;
-		}
+    private final CustomerDao clientes = DaoFactory.clientes();
+    private final OrderDao pedidos = DaoFactory.pedidos();
 
-	}
-	
-	public void Register(String name , String lastname , String phone ,String email,String Password,String Address) {
-		DB.register(name, lastname, phone, email, Password, Address);
-		System.out.println("Todo salio bien");
-		
-	}
-	
-	
-	public static int registrarPedido(double price, ArrayList<ItemPedido> items) {
-	    return DB.registrarPedido(getCostumer().getId(), price, items);
-	}
-	
-	public void generate_report() {
-		
-		ArrayList<String> fina = DB.reporte_ventas();
-		
-		try {
-			BufferedWriter writer = new BufferedWriter(new FileWriter("texto.txt"));
-			
-			for(String pp:fina) {
-				writer.write(pp);
-			}
-			
-			writer.close();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		
-	}
+    private Costumer cliente;          // sesión actual (null = nadie ha entrado)
 
-	public String getName() {
-		return Name;
-	}
+    private Restaurant() { }
 
-	public void setName(String name) {
-		Name = name;
-	}
+    public static Restaurant getInstance() {
+        return INSTANCIA;
+    }
 
-	public Data_Base getDB() {
-		return DB;
-	}
+    // ---------- Sesión ----------
 
-	public void setDB(Data_Base dB) {
-		DB = dB;
-	}
+    /** Regresa el cliente y lo deja como sesión; null si email/contraseña no coinciden. */
+    public Costumer login(String email, String password) {
+        Costumer c = clientes.login(email, password);
+        if (c != null) cliente = c;
+        return c;
+    }
 
-	public static Costumer getCostumer() {
-		return costumer;
-	}	
-		
-	
-	public static void setCostumer(Costumer costumer) {
-		Restaurant.costumer = costumer;
-	}
+    /** Registra al cliente, le pone el id que dio la BD y lo deja como sesión. */
+    public Costumer registrar(Costumer nuevo) {
+        int id = clientes.registrar(nuevo);
+        nuevo.setId(id);
+        cliente = nuevo;
+        return nuevo;
+    }
 
-	public static void changeCostumer(Costumer costumer) {		
-		getInstance(costumer);
-		Restaurant.setCostumer(costumer);
-		Restaurant.orders = getOrders();
-	}
+    public void cerrarSesion() {
+        cliente = null;
+    }
 
-	public static Restaurant getInstance(Costumer costumer) {
-		if(rest == null) {
-			rest = new Restaurant(costumer);
-		}
-		return rest;
-	}
-	
-	public static ArrayList<Order> getOrders() {
-		return DB.getOrders(costumer.getId());
-	}
+    public Costumer getCliente() {
+        return cliente;
+    }
 
+    public void actualizarPerfil(Costumer c) {
+        clientes.actualizarPerfil(c);
+    }
 
+    // ---------- Pedidos ----------
 
-	public static void setOrders(ArrayList<Order> orders) {
-		Restaurant.orders = orders;
-	}
-	
-	
+    public List<Order> misPedidos() {
+        exigirSesion();
+        return pedidos.pedidosDe(cliente.getId());
+    }
+
+    public List<OrderDetails> detallesDe(int idPedido) {
+        return pedidos.detallesDe(idPedido);
+    }
+
+    public void cambiarEstado(Order pedido) {
+        pedidos.cambiarEstado(pedido.getId(), pedido.getId_state());
+    }
+
+    public int registrarPedido(double total, List<ItemPedido> items) {
+        exigirSesion();
+        if (items == null || items.isEmpty()) {
+            throw new IllegalArgumentException("El carrito está vacío");
+        }
+        return pedidos.registrar(cliente.getId(), total, items);
+    }
+
+    private void exigirSesion() {
+        if (cliente == null) {
+            throw new IllegalStateException("No hay un cliente con sesión iniciada");
+        }
+    }
+
 
 }
