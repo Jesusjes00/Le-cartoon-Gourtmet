@@ -6,9 +6,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 
 import javax.swing.JOptionPane;
-
 import Restaurante_Completo.LeCartoon_Original.Carrito.ItemPedido;
-import java.sql.SQLException;
+
 
 public class Restaurant {
 	private static Restaurant rest;
@@ -53,10 +52,9 @@ public class Restaurant {
 	}
 	
 	
-public static int registrarPedido(double price ,ArrayList<ItemPedido>items)throws SQLException{
-	return DB.registrarPedido(getCostumer().getId(),price,items);
-}
-	
+	public static int registrarPedido(double price, ArrayList<ItemPedido> items) {
+	    return DB.registrarPedido(getCostumer().getId(), price, items);
+	}
 	
 	public void generate_report() {
 		

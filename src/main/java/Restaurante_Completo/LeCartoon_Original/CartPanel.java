@@ -1,18 +1,40 @@
 package Restaurante_Completo.LeCartoon_Original;
 
-import javax.swing.*;
-import javax.swing.border.*;
-
-import ProfileScreens.EditProfile;
-import Restaurante_Completo.LeCartoon_Original.Carrito.ItemPedido;
-
-import java.awt.*;
-import java.awt.event.*;
+import java.awt.BasicStroke;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Cursor;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.Rectangle;
+import java.awt.RenderingHints;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.awt.geom.RoundRectangle2D;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
-import java.sql.SQLException;
+
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.JButton;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollBar;
+import javax.swing.JScrollPane;
+import javax.swing.SwingConstants;
+import javax.swing.border.CompoundBorder;
+import javax.swing.border.EmptyBorder;
+import javax.swing.border.LineBorder;
+
+import Restaurante_Completo.LeCartoon_Original.Carrito.ItemPedido;
+import persistence.DaoException;
 
 public class CartPanel extends JPanel {
 	private ArrayList<ItemPedido> listaPedidos;
@@ -170,7 +192,7 @@ public class CartPanel extends JPanel {
 					    JOptionPane.showMessageDialog(null, "Tu pedido #" + id + " fue realizado");
 					    Carrito.vaciar();
 					    Main_Frame.changeDynamicPanel(new MainFramePanel());
-					} catch (SQLException ex) {
+					} catch (DaoException ex) {
 					    ex.printStackTrace();
 					    JOptionPane.showMessageDialog(null, "No se pudo registrar tu pedido. Intenta de nuevo.");
 					}
