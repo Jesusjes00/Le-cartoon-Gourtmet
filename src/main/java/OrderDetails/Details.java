@@ -12,7 +12,6 @@ import java.awt.Insets;
 import java.util.ArrayList;
 
 import Restaurante_Completo.LeCartoon_Original.Buttons;
-import Restaurante_Completo.LeCartoon_Original.Data_Base;
 import Restaurante_Completo.LeCartoon_Original.Order;
 import Restaurante_Completo.LeCartoon_Original.Preparing;
 import Restaurante_Completo.LeCartoon_Original.Sent;
@@ -26,6 +25,8 @@ import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
+import Restaurante_Completo.LeCartoon_Original.Restaurant;
+import persistence.DaoException;
 
 import java.awt.Font;
 import javax.swing.SwingConstants;
@@ -229,15 +230,20 @@ public class Details extends JPanel {
 		simState = new Buttons("Crear Cuenta", 70, 70, order.getColor(), order.getHover());
 		simState.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				if((order.getId_state()+1)<=3) {
-					order.setId_state(order.getId_state()+1);	
-					order.changeState();
-					Data_Base db = Data_Base.getInstance();
-					db.updateOrder(order);										
-					updateGraphics(order);					
-					
-				}else {
-					JOptionPane.showMessageDialog(null, "Este pedido ya ha sido entregado");
+				int anterior = order.getId_state();
+				if (anterior + 1 <= 3) {
+				    order.setId_state(anterior + 1);
+				    try {
+				        Restaurant.getInstance().cambiarEstado(order);
+				        order.changeState();          // el patrón State avanza solo si se guardó
+				        updateGraphics(order);
+				    } catch (DaoException ex) {
+				        order.setId_state(anterior);  // se regresa: la BD no cambió
+				        System.err.println("[DAO] " + ex.getMessage() + " -> " + ex.getCause());
+				        JOptionPane.showMessageDialog(null, "No se pudo guardar el nuevo estado del pedido");
+				    }
+				} else {
+				    JOptionPane.showMessageDialog(null, "Este pedido ya ha sido entregado");
 				}
 				
 			}

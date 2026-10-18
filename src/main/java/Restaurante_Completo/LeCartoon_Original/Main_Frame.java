@@ -42,7 +42,6 @@ public class Main_Frame {
 
 	private JFrame frame;
 	private JTextField find;
-	private Restaurant restaurant;
 	private static JPanel contentPaneDinamic;
 	private int mouseX, mouseY;
 	/**
@@ -357,7 +356,7 @@ public class Main_Frame {
 		navbar.add(orders, gbc_orders);
 		
 		//Direcciones
-		Buttons address = new Buttons(Restaurant.getCostumer().getAddress(), 30, 30, new Color(60,60,60), new Color(90,90,90));
+		Buttons address = new Buttons(Restaurant.getInstance().getCliente().getAddress(), 30, 30, new Color(60,60,60), new Color(90,90,90));
 		address.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		address.setPreferredSize(new Dimension(110, 38));
 		address.setFont(new Font("SansSerif", Font.BOLD, 12));
@@ -453,7 +452,7 @@ public class Main_Frame {
 	public void showmainframe(boolean visible,Costumer costumer) {
 		if(this.frame!= null) {
 			this.frame.setVisible(visible);
-			this.restaurant = Restaurant.getInstance(costumer);
+		
 		}
 	}
 	

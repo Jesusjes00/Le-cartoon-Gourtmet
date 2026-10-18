@@ -19,12 +19,13 @@ import com.jgoodies.forms.factories.DefaultComponentFactory;
 
 import Restaurante_Completo.LeCartoon_Original.Buttons;
 import Restaurante_Completo.LeCartoon_Original.Costumer;
-import Restaurante_Completo.LeCartoon_Original.Data_Base;
 
 import javax.swing.JTextField;
 import javax.swing.JSeparator;
 import java.awt.event.ActionListener;
 import java.awt.event.ActionEvent;
+import Restaurante_Completo.LeCartoon_Original.Restaurant;
+import persistence.DaoException;
 
 public class EditProfile extends JPanel {	
 	private String namePH = "Nuevo Nombre";
@@ -66,13 +67,20 @@ public class EditProfile extends JPanel {
 			public void actionPerformed(ActionEvent e) {				
 				if(canEdit()) {
 					if(JOptionPane.showConfirmDialog(null, "¿Tus datos son correctos?") == 0) {
-						costumer.setName(nameField.getText());
-						costumer.setLastName(lnameField.getText());
-						costumer.setPhone(phoneField.getText());
-						Data_Base db =Data_Base.getInstance();			
-						db.editProfile(costumer);
-						resetPH();
-						ProfileScreen.costumerChanged();						
+						Costumer cambios = new Costumer(costumer.getId(), nameField.getText(), lnameField.getText(),
+						        phoneField.getText(), costumer.getEmail(), costumer.getPassword(), costumer.getAddress());
+						try {
+						    Restaurant.getInstance().actualizarPerfil(cambios);
+						    costumer.setName(cambios.getName());            // solo si la BD aceptó
+						    costumer.setLastName(cambios.getLastName());
+						    costumer.setPhone(cambios.getPhone());
+						    JOptionPane.showMessageDialog(null, "Se actualizó correctamente tu perfil");
+						    resetPH();
+						    ProfileScreen.costumerChanged();
+						} catch (DaoException ex) {
+						    System.err.println("[DAO] " + ex.getMessage() + " -> " + ex.getCause());
+						    JOptionPane.showMessageDialog(null, "No se pudo actualizar tu perfil. Intenta de nuevo.");
+						}					
 					}					
 				}else {
 					JOptionPane.showMessageDialog(null, "Error, Ingrese información válida");
