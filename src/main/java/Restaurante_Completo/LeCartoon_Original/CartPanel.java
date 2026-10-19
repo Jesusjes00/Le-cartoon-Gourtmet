@@ -183,7 +183,7 @@ public class CartPanel extends JPanel {
         panelResumen.add(Box.createVerticalStrut(28));
 
         // Botón Realizar Pedido
-        Buttons btnRealizarPedido = new Buttons("Realizar Pedido", 30, 30, NARANJA, new Color(180, 60, 0));
+        Buttons btnRealizarPedido = Buttons.acento("Realizar pedido");
         btnRealizarPedido.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {	
 				if(listaPedidos.size() != 0) {
@@ -205,9 +205,6 @@ public class CartPanel extends JPanel {
         btnRealizarPedido.setAlignmentX(LEFT_ALIGNMENT);
         btnRealizarPedido.setMaximumSize(new Dimension(Integer.MAX_VALUE, 48));
         btnRealizarPedido.setPreferredSize(new Dimension(260, 48));
-        btnRealizarPedido.setFont(new Font("SansSerif", Font.BOLD, 15));
-        btnRealizarPedido.setForeground(Color.WHITE);
-        btnRealizarPedido.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         panelResumen.add(btnRealizarPedido);
 
         panelResumen.add(Box.createVerticalStrut(12));

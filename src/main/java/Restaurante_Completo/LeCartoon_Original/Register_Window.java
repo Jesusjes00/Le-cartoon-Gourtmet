@@ -112,24 +112,14 @@ public class Register_Window {
 		//Barra de control Personalizada===========================================================>
 		
 		// Botón Cerrar------------------------------------------------------------------->
-		Buttons btnClose = new Buttons("✕", 0, 0, Color.WHITE, new Color(231, 76, 60));
-		btnClose.setBounds(450, 0, 50, 30); // El panel mide 500 de ancho (1000 / 2)
-		btnClose.setFont(new Font("SansSerif", Font.PLAIN, 14));
-		btnClose.setForeground(new Color(120, 120, 120));
-		btnClose.addMouseListener(new MouseAdapter() {
-			@Override
-			public void mouseEntered(MouseEvent e) { btnClose.setForeground(Color.WHITE); }
-			@Override
-			public void mouseExited(MouseEvent e) { btnClose.setForeground(new Color(120, 120, 120)); }
-		});
-		btnClose.addActionListener(e -> System.exit(0)); 
+		Buttons btnClose = Buttons.control("✕", Color.WHITE, true);
+		btnClose.setBounds(450, 0, 50, 30);
+		btnClose.addActionListener(e -> System.exit(0));
 		RightPanel.add(btnClose);
 
 		// Botón Minimizar------------------------------------------------------------------------->
-		Buttons btnMinimize = new Buttons("—", 0, 0, Color.WHITE, new Color(235, 235, 235));
-		btnMinimize.setBounds(400, 0, 50, 30); 
-		btnMinimize.setFont(new Font("SansSerif", Font.PLAIN, 12));
-		btnMinimize.setForeground(new Color(120, 120, 120));
+		Buttons btnMinimize = Buttons.control("—", Color.WHITE, false);
+		btnMinimize.setBounds(400, 0, 50, 30);
 		btnMinimize.addActionListener(e -> frame.setState(JFrame.ICONIFIED)); 
 		RightPanel.add(btnMinimize);
 		
@@ -379,10 +369,8 @@ public class Register_Window {
 		RightPanel.add(txtadd);
 		
 		//Boton de login
-		Buttons loginbutton = new Buttons("Crear Cuenta", 30, 30, new Color(0, 0, 0), new Color(40, 40, 40));
-		loginbutton.setBounds(40, 580, 410, 40); 
-		loginbutton.setColorFondo(new java.awt.Color(0, 0, 0)); 
-		loginbutton.setForeground(new java.awt.Color(255, 255, 255));
+		Buttons loginbutton = Buttons.primario("Crear cuenta");
+		loginbutton.setBounds(40, 580, 416, 46);
 		//bottonListener
 		loginbutton.addActionListener(e->{
 			String user = txtName.getText().trim();
