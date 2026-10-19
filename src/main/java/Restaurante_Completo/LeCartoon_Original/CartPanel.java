@@ -35,6 +35,7 @@ import javax.swing.border.LineBorder;
 
 import Restaurante_Completo.LeCartoon_Original.Carrito.ItemPedido;
 import persistence.DaoException;
+import ui.Toast;
 
 public class CartPanel extends JPanel {
 	private ArrayList<ItemPedido> listaPedidos;
@@ -189,7 +190,7 @@ public class CartPanel extends JPanel {
 				if(listaPedidos.size() != 0) {
 					try {
 						int id = Restaurant.getInstance().registrarPedido(total + 18.5, listaPedidos);
-					    JOptionPane.showMessageDialog(null, "Tu pedido #" + id + " fue realizado");
+					    Toast.exito(CartPanel.this, "Tu pedido #" + id + " fue realizado");
 					    Carrito.vaciar();
 					    Main_Frame.changeDynamicPanel(new MainFramePanel());
 					} catch (DaoException ex) {
@@ -197,7 +198,7 @@ public class CartPanel extends JPanel {
 					    JOptionPane.showMessageDialog(null, "No se pudo registrar tu pedido. Intenta de nuevo.");
 					}
 				}else {
-					JOptionPane.showMessageDialog(null, "No has agregado productos a tu carrito");
+					Toast.aviso(CartPanel.this, "No has agregado productos a tu carrito");
 				}
 								
 			}
