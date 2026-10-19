@@ -196,22 +196,7 @@ public class Details extends JPanel {
 		mainPanel.add(panel_4, gbc_panel_4);
 			
 		
-		returnBtn = new Buttons("Crear Cuenta", 70, 70, order.getColor(), order.getHover());
-		returnBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-		returnBtn.addMouseListener(new MouseAdapter() {
-			@Override
-			public void mouseEntered(MouseEvent e) {
-				returnBtn.setForeground(Color.black);
-				returnBtn.setIcon(new ImageIcon(Details.class.getResource("/Restaurante_Completo/LeCartoon_Original/IMAGES/icons/arrow2.png")));
-				
-			}
-			@Override
-			public void mouseExited(MouseEvent e) {
-				returnBtn.setForeground(Color.white);
-				returnBtn.setIcon(new ImageIcon(Details.class.getResource("/Restaurante_Completo/LeCartoon_Original/IMAGES/icons/arrow1.png")));
-				
-			}
-		});
+		returnBtn = Buttons.estado("← Regresar", order.getColor());
 		returnBtn.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				
@@ -219,15 +204,11 @@ public class Details extends JPanel {
 				ProfileScreen.changePanel(new OrderHistory(ProfileScreen.getOrders()));
 			}
 		});
-		returnBtn.setFont(new Font("SansSerif", Font.BOLD, 22));
-		returnBtn.setText("  Regresar");
-		returnBtn.setIcon(new ImageIcon(Details.class.getResource("/Restaurante_Completo/LeCartoon_Original/IMAGES/icons/arrow1.png")));
-		returnBtn.setForeground(Color.WHITE);		
 		returnBtn.setBounds(0, 0, 216, 63);
 		panel_4.add(returnBtn);
 		
 		
-		simState = new Buttons("Crear Cuenta", 70, 70, order.getColor(), order.getHover());
+		simState = Buttons.estado("Avanzar estado →", order.getColor());
 		simState.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				int anterior = order.getId_state();
@@ -248,24 +229,6 @@ public class Details extends JPanel {
 				
 			}
 		});
-		simState.addMouseListener(new MouseAdapter() {			
-			
-			public void mouseEntered(MouseEvent e) {
-				simState.setForeground(Color.black);
-				
-				
-			}
-			@Override
-			public void mouseExited(MouseEvent e) {
-				simState.setForeground(Color.white);
-				
-				
-			}
-		});
-		simState.setFont(new Font("SansSerif", Font.BOLD, 22));
-		simState.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-		simState.setText("Simular estado");
-		simState.setForeground(Color.WHITE);		
 		simState.setBounds(918, 0, 216, 63);
 		panel_4.add(simState);
 		
@@ -360,11 +323,9 @@ public class Details extends JPanel {
 			btn.revalidate();
 		}
 		returnBtn.setColorFondo(order.getColor());
-		returnBtn.setColorHover(order.getHover());
 		returnBtn.repaint();
 		returnBtn.revalidate();
 		simState.setColorFondo(order.getColor());
-		simState.setColorHover(order.getHover());
 		simState.repaint();
 		simState.revalidate();
 		card.changeImage(order.getImage());

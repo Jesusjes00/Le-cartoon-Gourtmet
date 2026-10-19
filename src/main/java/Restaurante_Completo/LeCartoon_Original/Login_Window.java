@@ -265,10 +265,8 @@ public class Login_Window {
 				RightPanel.add(txtpass);
 				
 				//Botones
-				Buttons loginbutton = new Buttons("Entrar 🡪", 30, 30,new Color(0,0,0), new Color(40,40,40));
-				loginbutton.setBounds(40, 350, 300, 35);
-				//loginbutton.setColorFondo(new java.awt.Color(0,0,0)); 
-				loginbutton.setForeground(new java.awt.Color(255, 255, 255)); // color de la fuente
+				Buttons loginbutton = Buttons.primario("Entrar →");
+				loginbutton.setBounds(40, 350, 306, 41);   // +6 de ancho y alto la sobra ya esta en el boton
 				loginbutton.addActionListener(e ->{
 					String user = txtEmail.getText().trim();
 					String password_prev = new String(txtpass.getPassword());
@@ -314,11 +312,8 @@ public class Login_Window {
 				RightPanel.add(txtregister);
 				
 				//Boton para registrarse
-				Buttons regbutton = new Buttons("Registrarse", 30, 30,new Color(255,255,255), new Color(220,220,220));
-				regbutton.setBounds(40, 430, 300, 35);
-				regbutton.setColorFondo(new java.awt.Color(255,255,255)); 
-				regbutton.setForeground(new java.awt.Color(0,0,0));
-				regbutton.setColorBordeCustom(new Color(211, 84, 0));
+				Buttons regbutton = Buttons.secundario("Registrarse");
+				regbutton.setBounds(40, 430, 306, 41);
 				regbutton.addActionListener(e->{
 					Register_Window regWind = new Register_Window();
 					regWind.showregframe(true);

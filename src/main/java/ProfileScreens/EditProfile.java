@@ -61,8 +61,7 @@ public class EditProfile extends JPanel {
 			}
 		});
 		
-		Buttons editBtn;
-		editBtn= new Buttons("Crear Cuenta", 70, 70, Color.BLACK, Color.LIGHT_GRAY);
+		Buttons editBtn = Buttons.primario("Guardar cambios");
 		editBtn.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {				
 				if(canEdit()) {
@@ -88,11 +87,6 @@ public class EditProfile extends JPanel {
 				}
 			}
 		});
-		editBtn.setText("Editar Perfil");
-		editBtn.setForeground(Color.BLACK);
-		editBtn.setFont(new Font("SansSerif", Font.PLAIN, 22));
-		editBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-		editBtn.setColorFondo(Color.WHITE);
 		editBtn.setBounds(1044, 562, 187, 47);
 		mainPanel.add(editBtn);
 		

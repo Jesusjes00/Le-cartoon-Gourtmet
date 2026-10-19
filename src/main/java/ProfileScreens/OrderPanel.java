@@ -113,8 +113,7 @@ public class OrderPanel extends JPanel {
         }
         
         
-        Buttons loginbutton = new Buttons("Crear Cuenta", 30, 30, normal, hover);
-        loginbutton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        Buttons loginbutton = Buttons.estado("Detalles", normal);
         loginbutton.addActionListener(new ActionListener() {
         	public void actionPerformed(ActionEvent e) {
         		try {
@@ -130,10 +129,6 @@ public class OrderPanel extends JPanel {
         		}
         	}
         });        
-        loginbutton.setText("Detalles");
-        loginbutton.setFont(new Font("SansSerif", Font.BOLD, 22));
-        loginbutton.setForeground(Color.WHITE);
-        loginbutton.setColorFondo(normal);
         panel.add(loginbutton, BorderLayout.CENTER);
         
         JLabel lblNewLabel = new JLabel(" ");

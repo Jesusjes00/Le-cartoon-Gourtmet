@@ -93,7 +93,7 @@ public class ProfileScreen extends JPanel {
 		gbc_profilePanel.gridy = 1;
 		mainPanel.add(profilePanel, gbc_profilePanel);
 		
-		Buttons editProfile = new Buttons("Crear Cuenta", 70, 70, Color.BLACK, Color.LIGHT_GRAY);
+		Buttons editProfile = Buttons.secundario("Editar perfil");
 		editProfile.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {								
 				changePanel(new EditProfile(costumer));
@@ -101,19 +101,10 @@ public class ProfileScreen extends JPanel {
 								
 			}
 		});
-		editProfile.setText("Editar Perfil");
-		editProfile.setForeground(Color.BLACK);
-		editProfile.setFont(new Font("SansSerif", Font.PLAIN, 22));
-		editProfile.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-		editProfile.setColorFondo(Color.WHITE);
 		editProfile.setBounds(1612, 72, 187, 47);
 		profilePanel.add(editProfile);
 		
-		Buttons loginbutton_1 = new Buttons("Crear Cuenta", 70, 70, Color.WHITE, Color.WHITE);		
-		loginbutton_1.setText(orders.size() + " Pedidos");
-		loginbutton_1.setForeground(Color.BLACK);
-		loginbutton_1.setFont(new Font("SansSerif", Font.PLAIN, 22));
-		loginbutton_1.setColorFondo(Color.WHITE);
+		Buttons loginbutton_1 = Buttons.chip(orders.size() + " PEDIDOS");
 		loginbutton_1.setBounds(222, 135, 226, 32);
 		profilePanel.add(loginbutton_1);
 		

@@ -195,7 +195,7 @@ public class OrderDetails_2 extends JPanel {
             actualizarComponentes();
         });
 
-        Buttons btnAñadir = new Buttons("Añadir al Carrito", 70, 70, Color.BLACK, Color.WHITE);
+        Buttons btnAñadir = Buttons.acento("Añadir al carrito");
         btnAñadir.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
                 
@@ -207,12 +207,7 @@ public class OrderDetails_2 extends JPanel {
                     JOptionPane.INFORMATION_MESSAGE);
             }
         });
-        btnAñadir.setBounds(23, 24, 1309, 623);
-        btnAñadir.setColorFondo(new Color(0, 0, 0));
-        btnAñadir.setPreferredSize(new Dimension(280, 55));
-        btnAñadir.setFont(new Font("SansSerif", Font.BOLD, 20));
-        btnAñadir.setFocusPainted(false);
-        btnAñadir.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnAñadir.setPreferredSize(new Dimension(286, 61));
 
         pnlControles.add(btnMenos);
         pnlControles.add(lblCantidad);
