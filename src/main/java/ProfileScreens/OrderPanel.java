@@ -36,6 +36,7 @@ import java.awt.event.ActionEvent;
 import java.util.List;
 import Restaurante_Completo.LeCartoon_Original.Restaurant;
 import persistence.DaoException;
+import ui.Toast;
 
 public class OrderPanel extends JPanel {
 	private Order order;
@@ -119,7 +120,7 @@ public class OrderPanel extends JPanel {
         		try {
         		    List<OrderDetails> detalles = Restaurant.getInstance().detallesDe(order.getId());
         		    if (detalles.isEmpty()) {
-        		        JOptionPane.showMessageDialog(null, "Este pedido no tiene detalles registrados");
+        		        Toast.aviso(OrderPanel.this, "Este pedido no tiene detalles registrados");
         		    } else {
         		        Main_Frame.changeDynamicPanel(new Details(new ArrayList<>(detalles), order));
         		    }

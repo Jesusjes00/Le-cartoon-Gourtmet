@@ -11,6 +11,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import Dishes.*;
 import Franchises.*;
+import ui.Toast;
 
 public class OrderDetails_2 extends JPanel {
     private int cantidadActual = 1;
@@ -201,10 +202,7 @@ public class OrderDetails_2 extends JPanel {
                 
                 Carrito.agregarAlCarrito(platillo, cantidadActual);
                 
-                JOptionPane.showMessageDialog(OrderDetails_2.this, 
-                    "¡Se agregaron " + cantidadActual + "x " + platillo.getName() + " al carrito.", 
-                    "", 
-                    JOptionPane.INFORMATION_MESSAGE);
+                Toast.exito(OrderDetails_2.this, "Se agregaron " + cantidadActual + "× " + platillo.getName() + " al carrito");
             }
         });
         btnAñadir.setPreferredSize(new Dimension(286, 61));

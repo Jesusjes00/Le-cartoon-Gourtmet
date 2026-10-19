@@ -26,6 +26,7 @@ import java.awt.event.ActionListener;
 import java.awt.event.ActionEvent;
 import Restaurante_Completo.LeCartoon_Original.Restaurant;
 import persistence.DaoException;
+import ui.Toast;
 
 public class EditProfile extends JPanel {	
 	private String namePH = "Nuevo Nombre";
@@ -73,7 +74,7 @@ public class EditProfile extends JPanel {
 						    costumer.setName(cambios.getName());            // solo si la BD aceptó
 						    costumer.setLastName(cambios.getLastName());
 						    costumer.setPhone(cambios.getPhone());
-						    JOptionPane.showMessageDialog(null, "Se actualizó correctamente tu perfil");
+						    Toast.exito(EditProfile.this, "Se actualizó tu perfil");
 						    resetPH();
 						    ProfileScreen.costumerChanged();
 						} catch (DaoException ex) {

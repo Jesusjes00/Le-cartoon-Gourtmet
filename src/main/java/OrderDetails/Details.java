@@ -45,6 +45,7 @@ import java.awt.event.MouseEvent;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.awt.Cursor;
+import ui.Toast;
 
 
 
@@ -218,13 +219,14 @@ public class Details extends JPanel {
 				        Restaurant.getInstance().cambiarEstado(order);
 				        order.changeState();          // el patrón State avanza solo si se guardó
 				        updateGraphics(order);
+				        Toast.exito(Details.this, "Pedido actualizado: " + order.actualState());
 				    } catch (DaoException ex) {
 				        order.setId_state(anterior);  // se regresa: la BD no cambió
 				        System.err.println("[DAO] " + ex.getMessage() + " -> " + ex.getCause());
 				        JOptionPane.showMessageDialog(null, "No se pudo guardar el nuevo estado del pedido");
 				    }
 				} else {
-				    JOptionPane.showMessageDialog(null, "Este pedido ya ha sido entregado");
+				    Toast.aviso(Details.this, "Este pedido ya fue entregado");
 				}
 				
 			}
