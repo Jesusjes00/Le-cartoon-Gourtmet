@@ -84,6 +84,40 @@ public class Carrito {
         return total;
     }
 
+    // ── Cobro: reglas de negocio del carrito ───────────────────────────
+    public static final double TASA_IVA = 0.16;    // IVA en México
+    public static final double ENVIO    = 35.00;   // costo fijo de envío (MXN)
+
+    /** Suma de los platillos tal como se muestran (sus precios YA incluyen IVA). */
+    public static double importePlatillos() {
+        return redondear(total());
+    }
+
+    /** Importe de los platillos sin IVA: precio con IVA / 1.16. */
+    public static double subtotal() {
+        return redondear(total() / (1 + TASA_IVA));
+    }
+
+    /** Parte del importe que es IVA. Se calcula por diferencia para que subtotal + iva cuadre al centavo. */
+    public static double iva() {
+        return redondear(importePlatillos() - subtotal());
+    }
+
+    /** Envío: solo se cobra si hay algo en el carrito. */
+    public static double envio() {
+        return estaVacio() ? 0 : ENVIO;
+    }
+
+    /** Lo que paga el cliente y lo que se guarda como precio del pedido en la BD. */
+    public static double totalAPagar() {
+        return redondear(importePlatillos() + envio());
+    }
+
+    /** Redondea a centavos (2 decimales). */
+    private static double redondear(double x) {
+        return Math.round(x * 100) / 100.0;
+    }
+
     public static ArrayList<ItemPedido> getPedidos() {
         return listaPedidos;
     }

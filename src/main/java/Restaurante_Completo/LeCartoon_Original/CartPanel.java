@@ -15,9 +15,8 @@ import java.awt.RenderingHints;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.geom.RoundRectangle2D;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.Locale;
 
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -33,13 +32,15 @@ import javax.swing.border.CompoundBorder;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
 
+import Dishes.Dishes;
 import Restaurante_Completo.LeCartoon_Original.Carrito.ItemPedido;
 import persistence.DaoException;
 import ui.Toast;
+import ui.theme.Tarjeta;
+import ui.theme.Theme;
 
 public class CartPanel extends JPanel {
 	private ArrayList<ItemPedido> listaPedidos;
-	private double total = 0;
 
     private static final long serialVersionUID = 1L;
 
@@ -50,10 +51,10 @@ public class CartPanel extends JPanel {
     private static final Color GRIS_TEXTO = new Color(120, 115, 110);
     private static final Color GRIS_CLARO = new Color(248, 248, 248);
     private static final Color NARANJA = new Color(211, 84, 0);    
+    private static final Locale MX = Locale.forLanguageTag("es-MX");   // $1,234.50
 
     public CartPanel(ArrayList<ItemPedido> listaPedidos) {
     	this.listaPedidos = listaPedidos;
-    	this.total = 0; 
     	
         setBackground(BG);
         setLayout(new BorderLayout(0, 0));
@@ -80,6 +81,13 @@ public class CartPanel extends JPanel {
         contenido.add(subtitulo);
         contenido.add(Box.createVerticalStrut(30));
 
+        // Carrito vacío: en vez de un resumen en $0, una invitación a explorar
+        if (Carrito.estaVacio()) {
+            contenido.add(crearEstadoVacio());
+            add(envolverEnScroll(contenido), BorderLayout.CENTER);
+            return;
+        }
+
         // Fila principal: panel izquierdo + panel derecho
         JPanel filaMain = new JPanel(new BorderLayout(24, 0));
         filaMain.setBackground(BG);
@@ -96,49 +104,50 @@ public class CartPanel extends JPanel {
                 new EmptyBorder(24, 24, 24, 24)
         ));
 
-        // Encabezado del panel izquierdo
-        JPanel headerPedido = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        // Encabezado del panel izquierdo: "Tu pedido" + chip de artículos | Vaciar carrito
+        JPanel headerPedido = new JPanel(new BorderLayout(8, 0));
         headerPedido.setBackground(BG);
         headerPedido.setAlignmentX(LEFT_ALIGNMENT);
-        headerPedido.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
+        headerPedido.setMaximumSize(new Dimension(Integer.MAX_VALUE, 46));
 
-        JLabel iconoPedido = new JLabel("✕");
-        iconoPedido.setFont(new Font("SansSerif", Font.BOLD, 18));
-        iconoPedido.setForeground(NARANJA);
+        JPanel tituloPedido = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 6));
+        tituloPedido.setBackground(BG);
 
-        JLabel lblTuPedido = new JLabel("Tu Pedido");
+        JLabel lblTuPedido = new JLabel("Tu pedido");
         lblTuPedido.setFont(new Font("Arial Black", Font.BOLD, 18));
         lblTuPedido.setForeground(NEGRO);
 
-        headerPedido.add(iconoPedido);
-        headerPedido.add(lblTuPedido);
+        int unidades = Carrito.totalUnidades();
+        Buttons chipArticulos = Buttons.chip(unidades + (unidades == 1 ? " ARTÍCULO" : " ARTÍCULOS"));
+        chipArticulos.setPreferredSize(new Dimension(130, 30));
+
+        tituloPedido.add(lblTuPedido);
+        tituloPedido.add(chipArticulos);
+
+        Buttons btnVaciar = Buttons.peligro("Vaciar carrito");
+        btnVaciar.setPreferredSize(new Dimension(170, 42));
+        btnVaciar.addActionListener(e -> {
+            int respuesta = JOptionPane.showConfirmDialog(CartPanel.this,
+                    "¿Quitar todos los platillos del carrito?", "Vaciar carrito",
+                    JOptionPane.YES_NO_OPTION);
+            if (respuesta == JOptionPane.YES_OPTION) {
+                Carrito.vaciar();
+                refrescar();
+            }
+        });
+
+        headerPedido.add(tituloPedido, BorderLayout.WEST);
+        headerPedido.add(btnVaciar, BorderLayout.EAST);
 
         panelPedido.add(headerPedido);
         panelPedido.add(Box.createVerticalStrut(18));
 
         
-        for(ItemPedido item : listaPedidos) {	                
-        	
-	        //creación de item card
-        	        	
-	        panelPedido.add(crearItemCard(
-	                "",
-	                item.getPlatillo().getName(),
-	                item.getPlatillo().getDescription(),
-	                "$" +(item.getPlatillo().getPrice()*item.getCantidad()),
-	                item.getCantidad()
-	        ));
-	
-	        panelPedido.add(Box.createVerticalStrut(4));
-	        panelPedido.add(crearSeparadorFino());
-	        panelPedido.add(Box.createVerticalStrut(4));
-	        
-	        total += item.getPlatillo().getPrice()*item.getCantidad();
-	        
-	        BigDecimal bd = new BigDecimal(total);
-	        bd = bd.setScale(2, RoundingMode.HALF_UP);
-	        total = bd.doubleValue(); // 30.89
-	        
+        for (ItemPedido item : listaPedidos) {
+            panelPedido.add(crearItemCard(item));          // la tarjeta trae sus botones − + Quitar
+            panelPedido.add(Box.createVerticalStrut(4));
+            panelPedido.add(crearSeparadorFino());
+            panelPedido.add(Box.createVerticalStrut(4));
         }
 
        
@@ -164,16 +173,23 @@ public class CartPanel extends JPanel {
         panelResumen.add(Box.createVerticalStrut(20));
 
         // Filas de precios
-        panelResumen.add(crearFilaPrecio("Subtotal",    "$" + String.valueOf(total), false));
+        panelResumen.add(crearFilaPrecio("Subtotal",   dinero(Carrito.subtotal()), false));
         panelResumen.add(Box.createVerticalStrut(10));
-        panelResumen.add(crearFilaPrecio("Delivery Fee","$2.50",  false));
+        panelResumen.add(crearFilaPrecio("IVA (16 %)", dinero(Carrito.iva()),      false));
         panelResumen.add(Box.createVerticalStrut(10));
-        panelResumen.add(crearFilaPrecio("iva",       "$16",  false));
+        panelResumen.add(crearFilaPrecio("Envío",      dinero(Carrito.envio()),    false));
         panelResumen.add(Box.createVerticalStrut(14));
         panelResumen.add(crearSeparadorFino());
         panelResumen.add(Box.createVerticalStrut(14));
-        panelResumen.add(crearFilaPrecio("Total",       "$" + String.valueOf((total+18.50)), true));  // destacado
-        panelResumen.add(Box.createVerticalStrut(24));
+        panelResumen.add(crearFilaPrecio("Total", dinero(Carrito.totalAPagar()), true));  // destacado
+        panelResumen.add(Box.createVerticalStrut(4));
+
+        JLabel lblIvaIncluido = new JLabel("Precios con IVA incluido");
+        lblIvaIncluido.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        lblIvaIncluido.setForeground(GRIS_TEXTO);
+        lblIvaIncluido.setAlignmentX(LEFT_ALIGNMENT);
+        panelResumen.add(lblIvaIncluido);
+        panelResumen.add(Box.createVerticalStrut(20));
 
         // Dirección de entrega
         panelResumen.add(crearInfoBox("📦", "DIRECCIÓN DE ENTREGA", Restaurant.getInstance().getCliente().getAddress()));
@@ -187,9 +203,9 @@ public class CartPanel extends JPanel {
         Buttons btnRealizarPedido = Buttons.acento("Realizar pedido");
         btnRealizarPedido.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {	
-				if(listaPedidos.size() != 0) {
+				if(!Carrito.estaVacio()) {
 					try {
-						int id = Restaurant.getInstance().registrarPedido(total + 18.5, listaPedidos);
+						int id = Restaurant.getInstance().registrarPedido(Carrito.totalAPagar(), listaPedidos);
 					    Toast.exito(CartPanel.this, "Tu pedido #" + id + " fue realizado");
 					    Carrito.vaciar();
 					    Main_Frame.changeDynamicPanel(new MainFramePanel());
@@ -235,7 +251,11 @@ public class CartPanel extends JPanel {
         filaMain.add(panelResumen, BorderLayout.EAST);
         contenido.add(filaMain);
 
-        // JScrollPane 
+        add(envolverEnScroll(contenido), BorderLayout.CENTER);
+    }
+
+    /** Envuelve el contenido en el scroll con la barra delgada (antes vivía dentro del constructor). */
+    private JScrollPane envolverEnScroll(JPanel contenido) {
         JScrollPane scrollPane = new JScrollPane(contenido) {
             @Override
             public JScrollBar createVerticalScrollBar() {
@@ -287,8 +307,49 @@ public class CartPanel extends JPanel {
         scrollPane.getVerticalScrollBar().setUnitIncrement(20);
         scrollPane.setBackground(BG);
         scrollPane.getViewport().setBackground(BG);
+        return scrollPane;
+    }
 
-        add(scrollPane, BorderLayout.CENTER);
+    // ACCIONES DEL CARRITO
+
+    /** Vuelve a construir la pantalla con el estado actual del carrito. */
+    private void refrescar() {
+        Main_Frame.changeDynamicPanel(new CartPanel(Carrito.getPedidos()));
+    }
+
+    /** $1,234.50 — siempre dos decimales y separador de miles. */
+    private static String dinero(double monto) {
+        return String.format(MX, "$%,.2f", monto);
+    }
+
+    /** Tarjeta que se muestra cuando no hay platillos. */
+    private JPanel crearEstadoVacio() {
+        Tarjeta caja = new Tarjeta(null);
+        caja.setLayout(new BoxLayout(caja, BoxLayout.Y_AXIS));
+        caja.setAlignmentX(LEFT_ALIGNMENT);
+        caja.setMaximumSize(new Dimension(560, 240));
+
+        JLabel lblVacio = new JLabel("Tu carrito está vacío");
+        lblVacio.setFont(Theme.titulo(24));
+        lblVacio.setForeground(Theme.TINTA);
+        lblVacio.setAlignmentX(LEFT_ALIGNMENT);
+
+        JLabel lblInvitacion = new JLabel("Agrega platillos desde cualquiera de nuestras cocinas.");
+        lblInvitacion.setFont(Theme.texto(14));
+        lblInvitacion.setForeground(Theme.TINTA);
+        lblInvitacion.setAlignmentX(LEFT_ALIGNMENT);
+
+        Buttons btnExplorar = Buttons.primario("Explorar cocinas →");
+        btnExplorar.setAlignmentX(LEFT_ALIGNMENT);
+        btnExplorar.setMaximumSize(new Dimension(246, 52));
+        btnExplorar.addActionListener(e -> Main_Frame.changeDynamicPanel(new MainFramePanel()));
+
+        caja.add(lblVacio);
+        caja.add(Box.createVerticalStrut(8));
+        caja.add(lblInvitacion);
+        caja.add(Box.createVerticalStrut(24));
+        caja.add(btnExplorar);
+        return caja;
     }
 
     
@@ -311,13 +372,15 @@ public class CartPanel extends JPanel {
         return sep;
     }
     
-    private JPanel crearItemCard(String badge, String nombre, String descripcion,
-                                  String precio, int cantidad) {
+    private JPanel crearItemCard(ItemPedido item) {
+        Dishes platillo = item.getPlatillo();
+        int id = platillo.getId();
+        int cantidad = item.getCantidad();
 
         JPanel card = new JPanel(new BorderLayout(16, 0));
         card.setBackground(BG);
         card.setAlignmentX(LEFT_ALIGNMENT);
-        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 120));
+        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 135));
         card.setBorder(new EmptyBorder(12, 0, 12, 0));
 
         // Imagen placeholder 
@@ -350,42 +413,56 @@ public class CartPanel extends JPanel {
         info.setBackground(BG);
         info.setLayout(new BoxLayout(info, BoxLayout.Y_AXIS));
 
-        // Badge de categoría
-        JLabel lblBadge = new JLabel(badge);
-        lblBadge.setFont(new Font("SansSerif", Font.BOLD, 9));
-        lblBadge.setForeground(NARANJA);
-        lblBadge.setBorder(new EmptyBorder(0, 0, 4, 0));
-        lblBadge.setAlignmentX(LEFT_ALIGNMENT);
-
         // Nombre del platillo
-        JLabel lblNombre = new JLabel(nombre);
+        JLabel lblNombre = new JLabel(platillo.getName());
         lblNombre.setFont(new Font("Arial Black", Font.BOLD, 14));
         lblNombre.setForeground(NEGRO);
         lblNombre.setAlignmentX(LEFT_ALIGNMENT);
 
         // Descripción
-        JLabel lblDesc = new JLabel(descripcion );
+        JLabel lblDesc = new JLabel(platillo.getDescription());
         lblDesc.setFont(new Font("SansSerif", Font.ITALIC, 11));
         lblDesc.setForeground(GRIS_TEXTO);
         lblDesc.setAlignmentX(LEFT_ALIGNMENT);
 
-        // Fila de controles: [ — ] cantidad [ + ]   Eliminar
+        // Fila de controles: [ − ] cantidad [ + ]   [ Quitar ]
         JPanel controles = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         controles.setBackground(BG);
         controles.setAlignmentX(LEFT_ALIGNMENT);
-        
 
-        // Cantidad
-        JLabel lblCantidad = new JLabel("x" + String.valueOf(cantidad));
-        lblCantidad.setFont(new Font("SansSerif", Font.BOLD, 13));
+        Buttons btnMenos = Buttons.secundario("−");
+        btnMenos.setPreferredSize(new Dimension(42, 40));
+        btnMenos.addActionListener(e -> {                   // en 1, bajar = quitar (lo decide Carrito)
+            Carrito.cambiarCantidad(id, cantidad - 1);
+            refrescar();
+        });
+
+        JLabel lblCantidad = new JLabel(String.valueOf(cantidad));
+        lblCantidad.setFont(Theme.mono(16));
         lblCantidad.setForeground(NEGRO);
         lblCantidad.setHorizontalAlignment(SwingConstants.CENTER);
-        lblCantidad.setPreferredSize(new Dimension(24, 28));               
-               
-        controles.add(lblCantidad);      
-        controles.add(Box.createHorizontalStrut(8));        
+        lblCantidad.setPreferredSize(new Dimension(36, 34));
 
-        info.add(lblBadge);
+        Buttons btnMas = Buttons.secundario("+");
+        btnMas.setPreferredSize(new Dimension(42, 40));
+        btnMas.addActionListener(e -> {
+            Carrito.cambiarCantidad(id, cantidad + 1);
+            refrescar();
+        });
+
+        Buttons btnQuitar = Buttons.peligro("Quitar");
+        btnQuitar.setPreferredSize(new Dimension(100, 40));
+        btnQuitar.addActionListener(e -> {
+            Carrito.quitar(id);
+            refrescar();
+        });
+
+        controles.add(btnMenos);
+        controles.add(lblCantidad);
+        controles.add(btnMas);
+        controles.add(Box.createHorizontalStrut(12));
+        controles.add(btnQuitar);
+
         info.add(lblNombre);
         info.add(Box.createVerticalStrut(3));
         info.add(lblDesc);
@@ -394,7 +471,7 @@ public class CartPanel extends JPanel {
 
         // Precio (derecha) 
       
-        JLabel lblPrecio = new JLabel(String.valueOf(precio));
+        JLabel lblPrecio = new JLabel(dinero(platillo.getPrice() * cantidad));
         lblPrecio.setFont(new Font("Arial Black", Font.BOLD, 14));
         lblPrecio.setForeground(NEGRO);
         lblPrecio.setVerticalAlignment(SwingConstants.TOP);
