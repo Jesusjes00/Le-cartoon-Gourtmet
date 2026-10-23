@@ -35,9 +35,15 @@ public final class ConnectionFactory {
 
     private ConnectionFactory() { }  
 
-    // Un -Ddb.password=... al arrancar gana sobre el archivo
+ // Orden: -D  >  variable de entorno LECARTOON_*  >  db.properties
     private static String leer(Properties props, String clave) {
-        return System.getProperty(clave, props.getProperty(clave, "")).trim();
+    	String sistema = System.getProperty(clave);
+    	if(sistema != null)return sistema.trim();
+    	
+    	String env = System.getenv("LECARTOON_" + clave.replace('.', '_').toUpperCase());
+    	if (env != null) return env.trim();
+    	return props.getProperty(clave,"").trim();
+        
     }
 
 
