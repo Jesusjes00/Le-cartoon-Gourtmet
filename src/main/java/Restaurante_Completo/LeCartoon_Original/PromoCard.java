@@ -1,109 +1,88 @@
 package Restaurante_Completo.LeCartoon_Original;
 
 import java.awt.Color;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Graphics;
-import java.awt.Graphics2D;
-import java.awt.Image;
-import java.awt.RenderingHints;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.net.URL;
-import javax.swing.ImageIcon;
-import javax.swing.JPanel;
-import javax.swing.border.EmptyBorder;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
+
+import javax.swing.JPanel;
 import javax.swing.event.EventListenerList;
 
+import ui.theme.Imagen;
+import ui.theme.Theme;
+
+/**
+ * Tarjeta-imagen neo-brutalista: borde de 3 px + sombra dura.
+ * La imagen se dibuja en modo "cover" (sin deformarse) al tamaño que le dé el layout.
+ * Hover = sombra terracota; clic = se hunde y dispara los ActionListener.
+ */
 public class PromoCard extends JPanel {
 
-    private int arc = 30; // 
-    private Image imagenPromo;
-    private boolean isHovered = false;
-    
-    // Paleta de colores 
-    private Color colorBordeNormal = new Color(255, 255, 255);
-    private Color colorBordeHover = new Color(220, 220, 220); //Cambiarle los colores a los bordes 
-    private EventListenerList listenerList = new EventListenerList();
-    private String actionCommand = "";
+    private static final long serialVersionUID = 1L;
 
+    private final BufferedImage maestra;
+    private BufferedImage escalada;
+    private boolean hover = false;
+    private boolean presionada = false;
+    private boolean interactiva = true;
+    private final EventListenerList listenerList = new EventListenerList();
+
+    /** ancho y alto ahora son el tamaño PREFERIDO; el layout puede estirarla o encogerla. */
     public PromoCard(String rutaImagen, int ancho, int alto) {
         setPreferredSize(new Dimension(ancho, alto));
-        setOpaque(false); // esquinas transparentes
-        setLayout(null); 
+        setOpaque(false);                      // las esquinas de la sombra quedan transparentes
+        setLayout(null);
+        maestra = Imagen.cargar(rutaImagen);
+        setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
-        
-        setBorder(new EmptyBorder(5, 5, 5, 5));
-
-        // Cargar la imagen 
-        URL imgURL = PromoCard.class.getResource(rutaImagen);
-        if (imgURL != null) {
-            ImageIcon iconoOriginal = new ImageIcon(imgURL);
-            imagenPromo = iconoOriginal.getImage().getScaledInstance(ancho, alto, Image.SCALE_SMOOTH);
-        } else {
-            System.out.println("No se encontró la imagen promocional en: " + rutaImagen);
-        }
-
-        // listener del mouse 
         addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseEntered(MouseEvent e) {
-                isHovered = true;
-                repaint(); 
-            }
-
-            @Override
-            public void mouseExited(MouseEvent e) {
-                isHovered = false;
-                repaint(); 
-            }
-            
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                fireActionPerformed();
+            @Override public void mouseEntered(MouseEvent e)  { hover = interactiva; repaint(); }
+            @Override public void mouseExited(MouseEvent e)   { hover = false; presionada = false; repaint(); }
+            @Override public void mousePressed(MouseEvent e)  { presionada = interactiva; repaint(); }
+            @Override public void mouseReleased(MouseEvent e) {
+                boolean disparar = presionada && contains(e.getPoint());
+                presionada = false;
+                repaint();
+                if (disparar) fireActionPerformed();
             }
         });
     }
 
+    /** false = solo decorativa (sin hover, sin mano, sin clic). */
+    public void setInteractiva(boolean interactiva) {
+        this.interactiva = interactiva;
+        setCursor(interactiva ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
+    }
+
     @Override
     protected void paintComponent(Graphics g) {
-        Graphics2D g2d = (Graphics2D) g;
-        //Suavizado de curvas
-        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        int s = Theme.SOMBRA, b = Theme.BORDE;
+        int off = presionada ? s : 0;                  // presionada: se "hunde" sobre su sombra
+        int w = getWidth() - s, h = getHeight() - s;
+        if (w <= 2 * b || h <= 2 * b) return;
 
-        int demeritoBorde = 1; 
-        int ancho = getWidth() - demeritoBorde;
-        int alto = getHeight() - demeritoBorde;
-
-    
-        if (imagenPromo != null) {
- 
-            g2d.setClip(new java.awt.geom.RoundRectangle2D.Float(0, 0, ancho, alto, arc, arc));
-            g2d.drawImage(imagenPromo, 0, 0, getWidth(), getHeight(), this);
-            g2d.setClip(null); // Liberamos el recorte
-        } else {
-
-            g2d.setColor(new Color(240, 240, 240));
-            g2d.fillRoundRect(0, 0, ancho, alto, arc, arc);
+        if (!presionada) {                             // 1. sombra (terracota si el mouse está encima)
+            g.setColor(hover ? Theme.TERRACOTA : Theme.TINTA);
+            g.fillRect(s, s, w, h);
         }
+        g.setColor(Theme.TINTA);                       // 2. borde
+        g.fillRect(off, off, w, h);
 
- 
-        if (isHovered) {
-            g2d.setColor(colorBordeHover);
-            g2d.setStroke(new java.awt.BasicStroke(3f));  
+        int iw = w - 2 * b, ih = h - 2 * b;            // 3. imagen (o un bloque si no se encontró)
+        escalada = Imagen.enCache(maestra, escalada, iw, ih);
+        if (escalada != null) {
+            g.drawImage(escalada, off + b, off + b, null);
         } else {
-            g2d.setColor(colorBordeNormal);
-            g2d.setStroke(new java.awt.BasicStroke(1f)); 
+            g.setColor(new Color(0xD0D0D0));
+            g.fillRect(off + b, off + b, iw, ih);
         }
-        
-   
-        g2d.drawRoundRect(0, 0, ancho, alto, arc, arc);
-
-        super.paintComponent(g);
     }
-    
- 
+
     public void addActionListener(ActionListener l) {
         listenerList.add(ActionListener.class, l);
     }
@@ -113,10 +92,8 @@ public class PromoCard extends JPanel {
     }
 
     private void fireActionPerformed() {
-        ActionListener[] listeners = listenerList.getListeners(ActionListener.class);
-        if (listeners.length == 0) return;
-        ActionEvent event = new ActionEvent(this, ActionEvent.ACTION_PERFORMED, actionCommand);
-        for (ActionListener l : listeners) {
+        ActionEvent event = new ActionEvent(this, ActionEvent.ACTION_PERFORMED, "");
+        for (ActionListener l : listenerList.getListeners(ActionListener.class)) {
             l.actionPerformed(event);
         }
     }

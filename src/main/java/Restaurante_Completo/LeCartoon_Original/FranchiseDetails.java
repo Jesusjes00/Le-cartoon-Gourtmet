@@ -1,223 +1,142 @@
 package Restaurante_Completo.LeCartoon_Original;
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
+
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.util.ArrayList;
-import Dishes.*;
-import Franchises.*;
+import java.util.Locale;
 
+import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+
+import Dishes.Dishes;
+import Franchises.Franchises;
+import ui.theme.Grilla;
+import ui.theme.Imagen;
+import ui.theme.Lienzo;
+import ui.theme.Tarjeta;
+import ui.theme.Theme;
+
+/** Cocina de una franquicia: portada, nombre y cuadrícula de platillos. */
 public class FranchiseDetails extends JPanel {
-	
-    public FranchiseDetails(Franchises franquicia, ArrayList<Dishes> listaPlatillos, JPanel panelAnterior) {
-        setLayout(new BorderLayout());
-        Color colorFondo = Color.WHITE;
-        try {
-            if (franquicia.getColor() != null && !franquicia.getColor().isEmpty()) {
-                colorFondo = Color.decode(franquicia.getColor());
-            }
-        } catch (NumberFormatException e) {
-            System.err.println("Error de color, usando blanco por defecto.");
-        }
 
-        JPanel pnlContenedorPrincipal = new JPanel(new BorderLayout());
-        pnlContenedorPrincipal.setBackground(colorFondo);
+	private static final long serialVersionUID = 1L;
+	private static final Locale MX = Locale.forLanguageTag("es-MX");
+	private static final int ALTO_INFO = 104;   // alto del texto debajo de la foto de cada platillo
 
-        // Boton de regreso
-        JPanel pnlTop = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        pnlTop.setBackground(colorFondo);
-        
-        JLabel lblBack = new JLabel();
-        lblBack.setPreferredSize(new Dimension(60, 60));
-        lblBack.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        java.net.URL urlBack = getClass().getResource("/Icons/back.png");
-        if (urlBack != null) {
-            ImageIcon backIconOriginal = new ImageIcon(urlBack);
-            Image backImg = backIconOriginal.getImage().getScaledInstance(60, 60, Image.SCALE_SMOOTH);
-            lblBack.setIcon(new ImageIcon(backImg));
-        } else {
-            lblBack.setText("<");
-            lblBack.setFont(new Font("SansSerif", Font.BOLD, 40));
-            lblBack.setHorizontalAlignment(SwingConstants.CENTER);
-        }
-        
-        lblBack.addMouseListener(new MouseAdapter() {
-        	@Override
-            public void mouseClicked(MouseEvent e) {
-        		Main_Frame.changeDynamicPanel(new MainFramePanel());
-            }
-        });
-        pnlTop.add(lblBack);
+	public FranchiseDetails(Franchises franquicia, ArrayList<Dishes> listaPlatillos, JPanel panelAnterior) {
+		setLayout(new BorderLayout());
+		Color fondo = colorDe(franquicia);
+		setBackground(fondo);
 
-        // Imagen
-        JLabel lblImagenFranquicia = new JLabel();
-        lblImagenFranquicia.setHorizontalAlignment(SwingConstants.CENTER);
-        lblImagenFranquicia.setOpaque(true);
-        lblImagenFranquicia.setBackground(colorFondo);
+		Lienzo lienzo = new Lienzo(null);
+		lienzo.setLayout(new BoxLayout(lienzo, BoxLayout.Y_AXIS));
+		lienzo.setBackground(fondo);
+		lienzo.setBorder(BorderFactory.createEmptyBorder(20, Theme.MARGEN, 48, Theme.MARGEN));
 
-        Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
-        int anchoBanner = screenSize.width;
-        int altoBanner = (int) (anchoBanner * 0.375);
+		// ── Volver ──
+		Buttons btnVolver = Buttons.secundario("← Volver");
+		btnVolver.setPreferredSize(new Dimension(140, 42 + Theme.SOMBRA));
+		btnVolver.addActionListener(e -> Main_Frame.changeDynamicPanel(new MainFramePanel()));
+		JPanel filaVolver = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+		filaVolver.setOpaque(false);
+		filaVolver.add(btnVolver);
+		agregar(lienzo, filaVolver);
+		lienzo.add(Box.createVerticalStrut(16));
 
-        lblImagenFranquicia.setPreferredSize(new Dimension(anchoBanner, altoBanner));
+		// ── Portada: alto fijo, la imagen se recorta (no se deforma ni ocupa media pantalla) ──
+		PromoCard portada = new PromoCard(franquicia.getImage(), 1000, 300);
+		portada.setInteractiva(false);
+		portada.setPreferredSize(new Dimension(1000, 300));
+		portada.setMaximumSize(new Dimension(Integer.MAX_VALUE, 300));
+		agregar(lienzo, portada);
+		lienzo.add(Box.createVerticalStrut(24));
 
-        ImageIcon iconoFranquicia = cargarIcono(franquicia.getImage(), anchoBanner, altoBanner);
-        if (iconoFranquicia != null) {
-            lblImagenFranquicia.setIcon(iconoFranquicia);
-        } else {
-            lblImagenFranquicia.setText("Aquí va la imagen");
-            lblImagenFranquicia.setFont(new Font("SansSerif", Font.PLAIN, 24));
-        }
+		// ── Encabezado: logo + nombre + chip con el número de platillos ──
+		JPanel encabezado = new JPanel(new FlowLayout(FlowLayout.LEFT, 16, 0));
+		encabezado.setOpaque(false);
+		Imagen logo = new Imagen(franquicia.getLogo(), true);
+		logo.setPreferredSize(new Dimension(64, 64));
+		JPanel textos = new JPanel();
+		textos.setOpaque(false);
+		textos.setLayout(new BoxLayout(textos, BoxLayout.Y_AXIS));
+		textos.add(Theme.etiqueta("COCINA", Theme.mono(13), Theme.GRAFITO));
+		textos.add(Theme.etiqueta(franquicia.getName(), Theme.titulo(36), Theme.TINTA));
+		int n = listaPlatillos.size();
+		Buttons chip = Buttons.chip(n + (n == 1 ? " PLATILLO" : " PLATILLOS"));
+		chip.setPreferredSize(new Dimension(140, 32));
+		encabezado.add(logo);
+		encabezado.add(textos);
+		encabezado.add(chip);
+		agregar(lienzo, encabezado);
+		lienzo.add(Box.createVerticalStrut(24));
 
-        JPanel pnlHeader = new JPanel(new BorderLayout());
-        pnlHeader.setBackground(colorFondo);
-        pnlHeader.add(pnlTop, BorderLayout.NORTH);
-        pnlHeader.add(lblImagenFranquicia, BorderLayout.CENTER);
+		// ── Platillos ──
+		JPanel grilla = Grilla.panel(250, 1.88, ALTO_INFO + 30, 5);   // fotos de 640×340
+		for (Dishes platillo : listaPlatillos) {
+			grilla.add(tarjetaPlatillo(franquicia, platillo));
+		}
+		agregar(lienzo, grilla);
 
-        pnlContenedorPrincipal.add(pnlHeader, BorderLayout.NORTH);
+		JScrollPane scroll = Theme.scroll(lienzo);
+		scroll.getViewport().setBackground(fondo);
+		add(scroll, BorderLayout.CENTER);
+	}
 
-        // Titulo y botones
-        JPanel pnlContenidoInferior = new JPanel(new BorderLayout());
-        pnlContenidoInferior.setOpaque(false);
+	/** Tarjeta blanca: foto arriba, nombre y precio abajo. Toda la tarjeta es clicable. */
+	private Tarjeta tarjetaPlatillo(Franchises franquicia, Dishes platillo) {
+		Tarjeta card = new Tarjeta(new BorderLayout(0, 12));
 
-        // Título Platillos
-        JPanel pnlTituloPlatillos = new JPanel(new FlowLayout(FlowLayout.LEFT, 40, 20));
-        pnlTituloPlatillos.setOpaque(false);
+		Imagen foto = new Imagen(platillo.getImage(), true);
+		card.add(foto, BorderLayout.CENTER);
 
-        JLabel lblTextoPlatillos = new JLabel("Platillos:");
-        lblTextoPlatillos.setFont(new Font("SansSerif", Font.BOLD, 42));
-        lblTextoPlatillos.setForeground(Color.DARK_GRAY);
+		JPanel info = new JPanel(new BorderLayout(0, 6));
+		info.setOpaque(false);
+		info.setPreferredSize(new Dimension(10, ALTO_INFO));
 
-        pnlTituloPlatillos.add(lblTextoPlatillos);
-        pnlContenidoInferior.add(pnlTituloPlatillos, BorderLayout.NORTH);
+		JTextArea nombre = new JTextArea(platillo.getName());   // JTextArea para que nombres largos bajen de línea
+		nombre.setLineWrap(true);
+		nombre.setWrapStyleWord(true);
+		nombre.setEditable(false);
+		nombre.setFocusable(false);
+		nombre.setOpaque(false);
+		nombre.setBorder(null);
+		nombre.setFont(Theme.titulo(17));
+		nombre.setForeground(Theme.TINTA);
 
-        JPanel pnlPlatillos = new JPanel(new FlowLayout(FlowLayout.CENTER, 30, 10)) {
-            @Override
-            public Dimension getPreferredSize() {
-                int parentWidth = 0;
-                Container parent = getParent();
-                while (parent != null) {
-                    if (parent instanceof JViewport) {
-                        parentWidth = parent.getWidth();
-                        break;
-                    }
-                    parent = parent.getParent();
-                }
+		JPanel pie = new JPanel(new BorderLayout());
+		pie.setOpaque(false);
+		pie.add(Theme.etiqueta(String.format(MX, "$%,.2f", platillo.getPrice()), Theme.mono(18), Theme.TINTA), BorderLayout.WEST);
+		pie.add(Theme.etiqueta("Ver →", Theme.titulo(14), Theme.TERRACOTA), BorderLayout.EAST);
 
-                if (parentWidth > 0) {
-                    Insets insets = getInsets();
-                    int hgap = ((FlowLayout) getLayout()).getHgap();
-                    int vgap = ((FlowLayout) getLayout()).getVgap();
+		info.add(nombre, BorderLayout.CENTER);
+		info.add(pie, BorderLayout.SOUTH);
+		card.add(info, BorderLayout.SOUTH);
 
-                    int x = insets.left + hgap;
-                    int y = insets.top + vgap;
-                    int rowHeight = 0;
+		// Se pasa FranchiseDetails.this como panel anterior: "Volver" regresa a esta misma cocina
+		card.hacerClicable(() -> Main_Frame.changeDynamicPanel(new OrderDetails_2(franquicia, platillo, FranchiseDetails.this)));
+		return card;
+	}
 
-                    for (Component comp : getComponents()) {
-                        if (comp.isVisible()) {
-                            Dimension d = comp.getPreferredSize();
-                            if (x + d.width > parentWidth - insets.right && x > insets.left + hgap) {
-                                x = insets.left + hgap;
-                                y += rowHeight + vgap;
-                                rowHeight = 0;
-                            }
-                            x += d.width + hgap;
-                            rowHeight = Math.max(rowHeight, d.height);
-                        }
-                    }
-                    return new Dimension(parentWidth, y + rowHeight + insets.bottom + vgap);
-                }
-                return super.getPreferredSize();
-            }
-        };
-        pnlPlatillos.setOpaque(false);
+	static Color colorDe(Franchises franquicia) {
+		try {
+			return Color.decode(franquicia.getColor());
+		} catch (Exception e) {
+			return Theme.BLANCO;
+		}
+	}
 
-        for (Dishes platillo : listaPlatillos) {
-            JPanel pnlTarjeta = new JPanel(new BorderLayout());
-            pnlTarjeta.setPreferredSize(new Dimension(306, 210));
-            pnlTarjeta.setBackground(Color.WHITE);
-            pnlTarjeta.setBorder(BorderFactory.createLineBorder(new Color(220, 220, 220), 1, true));
-
-            JLabel lblImgPlatillo = new JLabel();
-            int anchoImg = 306;
-            int altoImg = 162;
-            lblImgPlatillo.setPreferredSize(new Dimension(anchoImg, altoImg));
-            lblImgPlatillo.setHorizontalAlignment(SwingConstants.CENTER);
-            ImageIcon iconoPlatillo = cargarIcono(platillo.getImage(), anchoImg, altoImg);
-            if (iconoPlatillo != null) {
-                lblImgPlatillo.setIcon(iconoPlatillo);
-            }
-            pnlTarjeta.add(lblImgPlatillo, BorderLayout.NORTH);
-
-            JPanel pnlInfoPlatillo = new JPanel(new BorderLayout(10, 0));
-            pnlInfoPlatillo.setBackground(Color.WHITE);
-            pnlInfoPlatillo.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
-
-            JTextArea txtNombre = new JTextArea(platillo.getName());
-            txtNombre.setWrapStyleWord(true);
-            txtNombre.setLineWrap(true);
-            txtNombre.setOpaque(false);
-            txtNombre.setEditable(false);
-            txtNombre.setFocusable(false);
-            txtNombre.setFont(new Font("SansSerif", Font.BOLD, 16));
-            txtNombre.setForeground(Color.DARK_GRAY);
-            pnlInfoPlatillo.add(txtNombre, BorderLayout.CENTER);
-
-            JLabel lblPrecio = new JLabel("$" + String.format("%.2f", platillo.getPrice()));
-            lblPrecio.setFont(new Font("SansSerif", Font.BOLD, 15));
-            lblPrecio.setForeground(new Color(200, 50, 50));
-            lblPrecio.setVerticalAlignment(SwingConstants.TOP);
-            pnlInfoPlatillo.add(lblPrecio, BorderLayout.EAST);
-
-            pnlTarjeta.add(pnlInfoPlatillo, BorderLayout.CENTER);
-
-            pnlTarjeta.setCursor(new Cursor(Cursor.HAND_CURSOR));
-
-            MouseAdapter clickAdapter = new MouseAdapter() {
-                @Override
-                public void mouseClicked(MouseEvent e) {
-                    // Se modificó esta línea para pasar FranchiseDetails.this como el panel anterior
-                    OrderDetails_2 panelDetalle = new OrderDetails_2(franquicia, platillo, FranchiseDetails.this);
-                    Main_Frame.changeDynamicPanel(panelDetalle);
-                }
-            };
-
-            pnlTarjeta.addMouseListener(clickAdapter);
-            lblImgPlatillo.addMouseListener(clickAdapter);
-            pnlInfoPlatillo.addMouseListener(clickAdapter);
-            txtNombre.addMouseListener(clickAdapter);
-            lblPrecio.addMouseListener(clickAdapter);
-
-            pnlPlatillos.add(pnlTarjeta);
-        }
-
-        pnlContenidoInferior.add(pnlPlatillos, BorderLayout.CENTER);
-        pnlContenedorPrincipal.add(pnlContenidoInferior, BorderLayout.CENTER);
-
-        JScrollPane scrollPane = new JScrollPane(pnlContenedorPrincipal);
-        scrollPane.setOpaque(false);
-        scrollPane.getViewport().setOpaque(false);
-        scrollPane.setBorder(BorderFactory.createEmptyBorder());
-        scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-        scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
-        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
-
-        add(scrollPane, BorderLayout.CENTER);
-    }
-
-    private ImageIcon cargarIcono(String rutaAbsoluta, int ancho, int alto) {
-        if (rutaAbsoluta == null || rutaAbsoluta.isEmpty())
-            return null;
-        try {
-            java.net.URL url = getClass().getResource(rutaAbsoluta);
-            if (url != null) {
-                ImageIcon iconoOriginal = new ImageIcon(url);
-                Image imgEscalada = iconoOriginal.getImage().getScaledInstance(ancho, alto, Image.SCALE_SMOOTH);
-                return new ImageIcon(imgEscalada);
-            }
-        } catch (Exception e) {
-            System.err.println("No se pudo cargar la imagen: " + rutaAbsoluta);
-        }
-        return null;
-    }
+	private static void agregar(JPanel lienzo, JComponent c) {
+		c.setAlignmentX(Component.LEFT_ALIGNMENT);
+		if (!(c instanceof JLabel)) c.setMaximumSize(new Dimension(Integer.MAX_VALUE, c.getPreferredSize().height));
+		lienzo.add(c);
+	}
 }
