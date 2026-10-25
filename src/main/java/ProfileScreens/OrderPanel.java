@@ -1,152 +1,97 @@
 package ProfileScreens;
 
-import java.awt.Color;
+import java.awt.BorderLayout;
 import java.awt.Container;
-import java.awt.Cursor;
-import java.awt.Font;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
+import java.awt.Dimension;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 
 import javax.swing.BorderFactory;
-import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
 
-import com.jgoodies.forms.factories.DefaultComponentFactory;
-import com.jgoodies.forms.layout.ColumnSpec;
-import com.jgoodies.forms.layout.FormLayout;
-import com.jgoodies.forms.layout.FormSpecs;
-import com.jgoodies.forms.layout.RowSpec;
-
 import OrderDetails.Details;
-import Restaurante_Completo.LeCartoon_Original.Order;
-import Restaurante_Completo.LeCartoon_Original.OrderDetails;
-
-import java.awt.GridLayout;
-import java.awt.Dimension;
-import java.awt.BorderLayout;
 import Restaurante_Completo.LeCartoon_Original.Buttons;
 import Restaurante_Completo.LeCartoon_Original.Main_Frame;
-
-import java.awt.event.ActionListener;
-import java.awt.event.ActionEvent;
-import java.util.List;
+import Restaurante_Completo.LeCartoon_Original.Order;
+import Restaurante_Completo.LeCartoon_Original.OrderDetails;
 import Restaurante_Completo.LeCartoon_Original.Restaurant;
 import persistence.DaoException;
 import ui.Toast;
+import ui.theme.Theme;
 
+/** Una fila del historial: número | total | estado (con su color) | Ver detalles. */
 public class OrderPanel extends JPanel {
 	private Order order;
     private Container container;
 
 	private static final long serialVersionUID = 1L;
+	private static final Locale MX = Locale.forLanguageTag("es-MX");
 
 	public OrderPanel(Order order, Container container) {
-		setBackground(new Color(0, 0, 0));
         this.order = order;
         this.container = container;
-        
-        setPreferredSize(new Dimension(1250, 100)); // ALTURA FIJA = 100
-        setMaximumSize(new Dimension(1250, 100));  
-        setMinimumSize(new Dimension(1250, 100));  
-        setLayout(new GridLayout(0, 7, 0, 0));
-        
-        JLabel idLabel = DefaultComponentFactory.getInstance().createLabel("Id de Pedido:");
-        idLabel.setOpaque(true);
-        idLabel.setBackground(new Color(255, 255, 255));
-        idLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        idLabel.setFont(new Font("SansSerif", Font.PLAIN, 25));
-        add(idLabel);
-        
-        //Clave del alumno 
-        JLabel idValue = new JLabel(String.valueOf(order.getId()));
-        idValue.setOpaque(true);
-        idValue.setBackground(new Color(255, 255, 255));
-        idValue.setFont(new Font("SansSerif", Font.PLAIN, 25));
-        idValue.setText(String.valueOf(order.getId()));
-        this.add(idValue);
-        this.setBorder(BorderFactory.createEtchedBorder());
-        
-        JLabel priceLabel = new JLabel("Precio:");
-        priceLabel.setOpaque(true);
-        priceLabel.setBackground(new Color(255, 255, 255));
-        priceLabel.setFont(new Font("SansSerif", Font.PLAIN, 25));
-        add(priceLabel);
-        
-        JLabel priceValue = new JLabel("$ " + order.getTotalPrice());
-        priceValue.setOpaque(true);
-        priceValue.setBackground(new Color(255, 255, 255));
-        priceValue.setFont(new Font("SansSerif", Font.PLAIN, 25));
-        add(priceValue);
-        
-        JLabel stateLabel = new JLabel("Estado:");
-        stateLabel.setOpaque(true);
-        stateLabel.setBackground(new Color(255, 255, 255));
-        stateLabel.setFont(new Font("SansSerif", Font.PLAIN, 25));
-        add(stateLabel);
-        
-        JLabel stateValue = new JLabel(order.actualState());
-        stateValue.setOpaque(true);
-        stateValue.setBackground(new Color(255, 255, 255));
-        stateValue.setFont(new Font("SansSerif", Font.BOLD, 25));        
-        stateValue.setForeground(order.getColor());
-        add(stateValue);
-        
-        JPanel panel = new JPanel();
-        panel.setBackground(new Color(255, 255, 255));
-        add(panel);
-        panel.setLayout(new BorderLayout(0, 0));
-        
-        //Variables de color 
-        Color normal = null, hover =null;
-        if(order.getId_state() == 1) {
-        	normal = new Color(170, 0, 0);   
-        	hover = Color.red;
-        }else if(order.getId_state() == 2) {
-        	normal = new Color(0, 170, 170);
-        	hover = Color.cyan;
-        }else if(order.getId_state() == 3){
-        	normal = new Color(0, 170, 0);
-        	hover = Color.green;
-        }
-        
-        
-        Buttons loginbutton = Buttons.estado("Detalles", normal);
-        loginbutton.addActionListener(new ActionListener() {
-        	public void actionPerformed(ActionEvent e) {
-        		try {
-        		    List<OrderDetails> detalles = Restaurant.getInstance().detallesDe(order.getId());
-        		    if (detalles.isEmpty()) {
-        		        Toast.aviso(OrderPanel.this, "Este pedido no tiene detalles registrados");
-        		    } else {
-        		        Main_Frame.changeDynamicPanel(new Details(new ArrayList<>(detalles), order));
-        		    }
-        		} catch (DaoException ex) {
-        		    System.err.println("[DAO] " + ex.getMessage() + " -> " + ex.getCause());
-        		    JOptionPane.showMessageDialog(null, "No se pudieron leer los detalles del pedido");
-        		}
-        	}
-        });        
-        panel.add(loginbutton, BorderLayout.CENTER);
-        
-        JLabel lblNewLabel = new JLabel(" ");
-        lblNewLabel.setFont(new Font("Tahoma", Font.PLAIN, 20));
-        panel.add(lblNewLabel, BorderLayout.NORTH);
-        
-        JLabel lblNewLabel_1 = new JLabel(" ");
-        lblNewLabel_1.setFont(new Font("Tahoma", Font.PLAIN, 20));
-        panel.add(lblNewLabel_1, BorderLayout.SOUTH);
-        
-        JLabel lblNewLabel_2 = new JLabel("      ");
-        panel.add(lblNewLabel_2, BorderLayout.WEST);
-        
-        JLabel lblNewLabel_3 = new JLabel("          ");
-        panel.add(lblNewLabel_3, BorderLayout.EAST);
 
+        setBackground(Theme.BLANCO);
+        setLayout(new GridBagLayout());
+        setBorder(BorderFactory.createCompoundBorder(
+        		BorderFactory.createLineBorder(Theme.TINTA, 2),
+        		BorderFactory.createEmptyBorder(10, 18, 10, 12)));
+        setMaximumSize(new Dimension(Integer.MAX_VALUE, 78));
 
+        GridBagConstraints c = new GridBagConstraints();
+        c.gridy = 0;
+        c.anchor = GridBagConstraints.WEST;
+
+        c.gridx = 0; c.weightx = 0.25;
+        add(columna("PEDIDO", "#" + order.getId()), c);
+
+        c.gridx = 1; c.weightx = 0.35;
+        add(columna("TOTAL", String.format(MX, "$%,.2f", order.getTotalPrice())), c);
+
+        // Estado: recuadro del color del estado (viene del patrón State)
+        JLabel estado = new JLabel(order.actualState().toUpperCase(), SwingConstants.CENTER);
+        estado.setOpaque(true);
+        estado.setBackground(order.getColor());
+        estado.setForeground(Theme.textoSobre(order.getColor()));
+        estado.setFont(Theme.mono(13));
+        estado.setBorder(BorderFactory.createLineBorder(Theme.TINTA, 2));
+        estado.setPreferredSize(new Dimension(130, 30));
+        c.gridx = 2; c.weightx = 0.25;
+        add(estado, c);
+
+        Buttons verDetalles = Buttons.secundario("Ver detalles →");
+        verDetalles.setFont(Theme.titulo(14));
+        verDetalles.setPreferredSize(new Dimension(150, 40 + Theme.SOMBRA));
+        verDetalles.addActionListener(e -> {
+    		try {
+    		    List<OrderDetails> detalles = Restaurant.getInstance().detallesDe(order.getId());
+    		    if (detalles.isEmpty()) {
+    		        Toast.aviso(OrderPanel.this, "Este pedido no tiene detalles registrados");
+    		    } else {
+    		        Main_Frame.changeDynamicPanel(new Details(new ArrayList<>(detalles), order));
+    		    }
+    		} catch (DaoException ex) {
+    		    System.err.println("[DAO] " + ex.getMessage() + " -> " + ex.getCause());
+    		    JOptionPane.showMessageDialog(null, "No se pudieron leer los detalles del pedido");
+    		}
+        });
+        c.gridx = 3; c.weightx = 0; c.anchor = GridBagConstraints.EAST;
+        c.insets = new Insets(0, 12, 0, 0);
+        add(verDetalles, c);
 	}
 
+	private static JPanel columna(String etiqueta, String valor) {
+		JPanel p = new JPanel(new BorderLayout(0, 2));
+		p.setOpaque(false);
+		p.add(Theme.etiqueta(etiqueta, Theme.mono(11), Theme.GRAFITO), BorderLayout.NORTH);
+		p.add(Theme.etiqueta(valor, Theme.mono(18), Theme.TINTA), BorderLayout.CENTER);
+		return p;
+	}
 }
