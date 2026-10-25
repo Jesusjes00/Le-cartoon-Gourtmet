@@ -2,6 +2,8 @@ package Restaurante_Completo.LeCartoon_Original;
 
 import java.awt.Color;
 
+import ui.theme.Theme;
+
 import javax.swing.ImageIcon;
 import javax.swing.JOptionPane;
 
@@ -15,8 +17,8 @@ public class Preparing implements State{
 	//Se crea el estado de preparando y se guarda la referencia del pedido
 	public Preparing(Order order) {
 		this.order = order; 
-		color = new Color(190, 0, 0);
-		hover = Color.red;
+		color = Theme.TERRACOTA;   // colores de la paleta (antes rojo/cian/verde puros)
+		hover = new Color(0xA84C30);
 		image = "/Restaurante_Completo/LeCartoon_Original/GIF/preparing1.gif";
 	}
 	

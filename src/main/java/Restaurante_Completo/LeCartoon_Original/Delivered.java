@@ -2,6 +2,8 @@ package Restaurante_Completo.LeCartoon_Original;
 
 import java.awt.Color;
 
+import ui.theme.Theme;
+
 import javax.swing.ImageIcon;
 
 public class Delivered implements State{
@@ -14,8 +16,8 @@ public class Delivered implements State{
 	
 	public Delivered(Order order) {
 		this.order = order;
-		color = new Color(0, 170, 0);
-		hover = Color.green;
+		color = Theme.SALVIA;   // colores de la paleta (antes rojo/cian/verde puros)
+		hover = new Color(0x828F77);
 		image = "/Restaurante_Completo/LeCartoon_Original/GIF/delivered1.gif";
 	}
 	
