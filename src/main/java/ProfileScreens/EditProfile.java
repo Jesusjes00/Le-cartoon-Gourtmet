@@ -1,226 +1,160 @@
 package ProfileScreens;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Cursor;
-import java.awt.Font;
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
+import java.awt.Dimension;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
 
-import javax.swing.ImageIcon;
-import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
-import javax.swing.SwingConstants;
-
-import com.jgoodies.forms.factories.DefaultComponentFactory;
+import javax.swing.JTextField;
 
 import Restaurante_Completo.LeCartoon_Original.Buttons;
 import Restaurante_Completo.LeCartoon_Original.Costumer;
-
-import javax.swing.JTextField;
-import javax.swing.JSeparator;
-import java.awt.event.ActionListener;
-import java.awt.event.ActionEvent;
 import Restaurante_Completo.LeCartoon_Original.Restaurant;
 import persistence.DaoException;
 import ui.Toast;
+import ui.theme.Theme;
 
-public class EditProfile extends JPanel {	
-	private String namePH = "Nuevo Nombre";
-	private String lnamePH = "Nuevo Apellido";
-	private String phonePH = "Nuevo Teléfono";
+/**
+ * Formulario para cambiar nombre, apellido y teléfono.
+ * Los campos ya traen los datos actuales (antes salían vacíos con un texto gris que había que borrar).
+ */
+public class EditProfile extends JPanel {
 
 	private static final long serialVersionUID = 1L;
+	private final Costumer costumer;
 	private JTextField nameField;
 	private JTextField lnameField;
 	private JTextField phoneField;
 
 	public EditProfile(Costumer costumer) {
-		setSize(1357, 672);
-		setLayout(new BorderLayout(0, 0));		
-		
-		JPanel mainPanel = new JPanel();
-		mainPanel.setBackground(new Color(255, 255, 255));
-		add(mainPanel, BorderLayout.CENTER);
-		mainPanel.setLayout(null);
-		
-		nameField = new JTextField();
-		nameField.setBounds(674, 124, 557, 52);		
-		nameField.addKeyListener(new KeyAdapter() {
-			@Override
-			public void keyTyped(KeyEvent e) {
-				nameField.setForeground(Color.white);
-			}
-		});
-		nameField.addMouseListener(new MouseAdapter() {
-			@Override
-			public void mouseClicked(MouseEvent e) {
-				nameField.setText("");
-			}
-		});
-		
-		Buttons editBtn = Buttons.primario("Guardar cambios");
-		editBtn.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {				
-				if(canEdit()) {
-					if(JOptionPane.showConfirmDialog(null, "¿Tus datos son correctos?") == 0) {
-						Costumer cambios = new Costumer(costumer.getId(), nameField.getText(), lnameField.getText(),
-						        phoneField.getText(), costumer.getEmail(), costumer.getPassword(), costumer.getAddress());
-						try {
-						    Restaurant.getInstance().actualizarPerfil(cambios);
-						    costumer.setName(cambios.getName());            // solo si la BD aceptó
-						    costumer.setLastName(cambios.getLastName());
-						    costumer.setPhone(cambios.getPhone());
-						    Toast.exito(EditProfile.this, "Se actualizó tu perfil");
-						    resetPH();
-						    ProfileScreen.costumerChanged();
-						} catch (DaoException ex) {
-						    System.err.println("[DAO] " + ex.getMessage() + " -> " + ex.getCause());
-						    JOptionPane.showMessageDialog(null, "No se pudo actualizar tu perfil. Intenta de nuevo.");
-						}					
-					}					
-				}else {
-					JOptionPane.showMessageDialog(null, "Error, Ingrese información válida");
-					resetPH();
-				}
-			}
-		});
-		editBtn.setBounds(1044, 562, 187, 47);
-		mainPanel.add(editBtn);
-		
-		JSeparator separator_1_1 = new JSeparator();
-		separator_1_1.setBounds(674, 523, 557, 2);
-		mainPanel.add(separator_1_1);
-				
-		phoneField = new JTextField();
-		phoneField.setText(phonePH);
-		phoneField.setForeground(Color.LIGHT_GRAY);
-		phoneField.setFont(new Font("SansSerif", Font.BOLD, 40));
-		phoneField.setBorder(null);
-		phoneField.setBackground(Color.BLACK);
-		phoneField.setBounds(674, 460, 557, 52);
-		phoneField.addKeyListener(new KeyAdapter() {
-			@Override
-			public void keyTyped(KeyEvent e) {
-				phoneField.setForeground(Color.white);
-			}
-		});
-		phoneField.addMouseListener(new MouseAdapter() {
-			@Override
-			public void mouseClicked(MouseEvent e) {
-				phoneField.setText("");
-			}
-		});
-		mainPanel.add(phoneField);
-		
-		JSeparator separator_1 = new JSeparator();
-		separator_1.setBounds(674, 351, 557, 2);
-		mainPanel.add(separator_1);
-				
-		lnameField = new JTextField();
-		lnameField.setText(lnamePH);
-		lnameField.setForeground(Color.LIGHT_GRAY);
-		lnameField.setFont(new Font("SansSerif", Font.BOLD, 40));
-		lnameField.setBorder(null);
-		lnameField.setBackground(Color.BLACK);
-		lnameField.setBounds(674, 288, 557, 52);
-		lnameField.addKeyListener(new KeyAdapter() {
-			@Override
-			public void keyTyped(KeyEvent e) {
-				lnameField.setForeground(Color.white);
-			}
-		});
-		lnameField.addMouseListener(new MouseAdapter() {
-			@Override
-			public void mouseClicked(MouseEvent e) {
-				lnameField.setText("");
-			}
-		});
-		mainPanel.add(lnameField);
-		
-		JSeparator separator = new JSeparator();
-		separator.setBounds(674, 187, 557, 2);
-		mainPanel.add(separator);
-				
-		nameField.setText(namePH);
-		nameField.setForeground(Color.LIGHT_GRAY);
-		nameField.setFont(new Font("SansSerif", Font.BOLD, 40));
-		nameField.setBorder(null);
-		nameField.setBackground(new Color(0, 0, 0));
-		mainPanel.add(nameField);
-		
-		JLabel lblInformacinPersonal = new JLabel("Información Personal:");
-		lblInformacinPersonal.setHorizontalAlignment(SwingConstants.CENTER);
-		lblInformacinPersonal.setForeground(Color.WHITE);
-		lblInformacinPersonal.setFont(new Font("SansSerif", Font.BOLD, 40));
-		lblInformacinPersonal.setBounds(391, 37, 550, 42);
-		mainPanel.add(lblInformacinPersonal);
-		
-		JLabel lblEmail = new JLabel("  Teléfono:");
-		lblEmail.setIcon(new ImageIcon(EditProfile.class.getResource("/Restaurante_Completo/LeCartoon_Original/IMAGES/icons/phone.png")));
-		lblEmail.setForeground(Color.WHITE);
-		lblEmail.setFont(new Font("SansSerif", Font.BOLD, 40));
-		lblEmail.setBounds(111, 483, 243, 42);
-		mainPanel.add(lblEmail);
-		
-		JLabel lblNewLabel = new JLabel("  Apellido:");
-		lblNewLabel.setIcon(new ImageIcon(EditProfile.class.getResource("/Restaurante_Completo/LeCartoon_Original/IMAGES/icons/user.PNG")));
-		lblNewLabel.setFont(new Font("SansSerif", Font.BOLD, 40));
-		lblNewLabel.setForeground(new Color(255, 255, 255));
-		lblNewLabel.setBounds(111, 311, 274, 42);
-		mainPanel.add(lblNewLabel);
-		
-		JLabel lblNewJgoodiesLabel = DefaultComponentFactory.getInstance().createLabel("  Nombre:");
-		lblNewJgoodiesLabel.setIcon(new ImageIcon(Personalinfo.class.getResource("/Restaurante_Completo/LeCartoon_Original/IMAGES/icons/user.PNG")));
-		lblNewJgoodiesLabel.setHorizontalAlignment(SwingConstants.LEFT);
-		lblNewJgoodiesLabel.setForeground(new Color(255, 255, 255));
-		lblNewJgoodiesLabel.setFont(new Font("SansSerif", Font.BOLD, 40));
-		lblNewJgoodiesLabel.setBounds(111, 136, 284, 42);
-		mainPanel.add(lblNewJgoodiesLabel);
-		
-		Buttons loginbutton_1_1 = new Buttons("", 70, 70, Color.BLACK, Color.BLACK);
-		loginbutton_1_1.setBounds(23, 24, 1309, 623);
-		loginbutton_1_1.setForeground(Color.WHITE);
-		loginbutton_1_1.setColorFondo(new Color(0, 0, 0));
-		mainPanel.add(loginbutton_1_1);
-		
-		Buttons loginbutton_1 = new Buttons("", 70, 70, Color.white, Color.white);
-		loginbutton_1.setBounds(10, 11, 1337, 650);
-		loginbutton_1.setForeground(Color.WHITE);
-		mainPanel.add(loginbutton_1);
-		
-		Buttons loginbutton = new Buttons("", 70, 70, Color.black, Color.black);
-		loginbutton.setBounds(0, 0, 1357, 672);
-		loginbutton.setForeground(Color.white);
-		mainPanel.add(loginbutton);
-				
+		this.costumer = costumer;
+		setOpaque(false);
+		setLayout(new BorderLayout());
 
+		nameField  = campo(costumer.getName(),     "Tu nombre");
+		lnameField = campo(costumer.getLastName(), "Tus apellidos");
+		phoneField = campo(costumer.getPhone(),    "10 dígitos");
+
+		JPanel form = new JPanel(new GridBagLayout());
+		form.setOpaque(false);
+		GridBagConstraints c = new GridBagConstraints();
+		c.anchor = GridBagConstraints.WEST;
+		c.fill = GridBagConstraints.HORIZONTAL;
+		c.gridx = 0;
+		c.weightx = 1;
+
+		int fila = 0;
+		for (Object[] par : new Object[][] { {"NOMBRE", nameField}, {"APELLIDOS", lnameField}, {"TELÉFONO", phoneField} }) {
+			c.gridy = fila++;
+			c.insets = new Insets(fila == 1 ? 0 : 18, 0, 6, 0);
+			form.add(Theme.etiqueta((String) par[0], Theme.mono(12), Theme.GRAFITO), c);
+			c.gridy = fila++;
+			c.insets = new Insets(0, 0, 0, 0);
+			form.add((JTextField) par[1], c);
+		}
+
+		// Correo: no se edita aquí (es el usuario para entrar)
+		c.gridy = fila++;
+		c.insets = new Insets(18, 0, 6, 0);
+		form.add(Theme.etiqueta("CORREO (NO SE PUEDE CAMBIAR)", Theme.mono(12), Theme.GRAFITO), c);
+		c.gridy = fila++;
+		c.insets = new Insets(0, 0, 0, 0);
+		JTextField correo = campo(costumer.getEmail(), "");
+		correo.setEnabled(false);
+		form.add(correo, c);
+
+		Buttons editBtn = Buttons.primario("Guardar cambios");
+		editBtn.setPreferredSize(new Dimension(200, 46 + Theme.SOMBRA));
+		editBtn.addActionListener(e -> guardar());
+
+		Buttons cancelar = Buttons.secundario("Cancelar");
+		cancelar.setPreferredSize(new Dimension(140, 46 + Theme.SOMBRA));
+		cancelar.addActionListener(e -> volverAInfo());
+
+		c.gridy = fila;
+		c.insets = new Insets(28, 0, 0, 0);
+		c.fill = GridBagConstraints.NONE;
+		form.add(ProfileScreen.fila(14, editBtn, cancelar), c);
+
+		// El formulario no pasa de 560 px de ancho: los campos larguísimos cuestan leerlos
+		JPanel limite = new JPanel(new BorderLayout()) {
+			@Override public Dimension getPreferredSize() {
+				return new Dimension(Math.min(560, super.getPreferredSize().width), super.getPreferredSize().height);
+			}
+		};
+		limite.setOpaque(false);
+		limite.add(form, BorderLayout.CENTER);
+		JPanel izquierda = new JPanel(new BorderLayout());
+		izquierda.setOpaque(false);
+		izquierda.add(limite, BorderLayout.WEST);
+		JPanel arriba = new JPanel(new BorderLayout());
+		arriba.setOpaque(false);
+		arriba.add(izquierda, BorderLayout.NORTH);
+
+		add(ProfileScreen.seccion("Editar perfil", "user.PNG", arriba), BorderLayout.CENTER);
 	}
-	
-	public boolean canEdit() {
-		if(!nameField.getText().isEmpty() && !nameField.getText().equalsIgnoreCase(namePH) &&
-				!lnameField.getText().isEmpty() && !lnameField.getText().equalsIgnoreCase(lnamePH) &&
-				!phoneField.getText().isEmpty() && !phoneField.getText().equalsIgnoreCase(phonePH) ) {
-			//Si los placeholders tienen texto válido, que performe la acción de updatear
-			return true;
-		}else {
-			return false;
+
+	private void guardar() {
+		marcarErrores();
+		if (!canEdit()) {
+			Toast.aviso(this, "Completa los campos marcados");
+			return;
+		}
+		if (JOptionPane.showConfirmDialog(this, "¿Tus datos son correctos?", "Guardar cambios",
+				JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) {
+			return;
+		}
+		Costumer cambios = new Costumer(costumer.getId(), nameField.getText().trim(), lnameField.getText().trim(),
+		        phoneField.getText().trim(), costumer.getEmail(), costumer.getPassword(), costumer.getAddress());
+		try {
+		    Restaurant.getInstance().actualizarPerfil(cambios);
+		    costumer.setName(cambios.getName());            // solo si la BD aceptó
+		    costumer.setLastName(cambios.getLastName());
+		    costumer.setPhone(cambios.getPhone());
+		    Toast.exito(this, "Se actualizó tu perfil");
+		    ProfileScreen.costumerChanged();
+		    volverAInfo();
+		} catch (DaoException ex) {
+		    System.err.println("[DAO] " + ex.getMessage() + " -> " + ex.getCause());
+		    JOptionPane.showMessageDialog(this, "No se pudo actualizar tu perfil. Intenta de nuevo.");
 		}
 	}
-	
-	public void resetPH() {
-		nameField.setText(namePH);
-		nameField.setForeground(Color.LIGHT_GRAY);
-		lnameField.setText(lnamePH);
-		lnameField.setForeground(Color.LIGHT_GRAY);
-		phoneField.setText(phonePH);
-		phoneField.setForeground(Color.LIGHT_GRAY);
+
+	private void volverAInfo() {
+		ProfileScreen.changePanel(new Personalinfo());
+		Personalinfo.costumerChanged(costumer);
 	}
-	
-	public void changeCostumer() {
-		nameField.getText();
+
+	/** Campo con el estilo del tema: texto actual + placeholder de FlatLaf cuando está vacío. */
+	private static JTextField campo(String valor, String placeholder) {
+		JTextField t = new JTextField(valor);
+		t.setFont(Theme.texto(17));
+		t.putClientProperty("JTextField.placeholderText", placeholder);
+		t.setPreferredSize(new Dimension(420, 44));
+		return t;
+	}
+
+	/** Borde ladrillo en los campos vacíos (FlatLaf: JComponent.outline = "error"). */
+	private void marcarErrores() {
+		for (JTextField t : new JTextField[] { nameField, lnameField, phoneField }) {
+			t.putClientProperty("JComponent.outline", t.getText().trim().isEmpty() ? "error" : null);
+		}
+	}
+
+	public boolean canEdit() {
+		return !nameField.getText().trim().isEmpty()
+			&& !lnameField.getText().trim().isEmpty()
+			&& !phoneField.getText().trim().isEmpty();
+	}
+
+	/** Regresa los campos a los datos actuales del cliente. */
+	public void resetPH() {
+		nameField.setText(costumer.getName());
+		lnameField.setText(costumer.getLastName());
+		phoneField.setText(costumer.getPhone());
+		marcarErrores();
 	}
 }

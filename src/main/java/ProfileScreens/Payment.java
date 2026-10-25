@@ -1,103 +1,72 @@
 package ProfileScreens;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Font;
+import java.awt.Dimension;
 
-import javax.swing.ImageIcon;
+import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.SwingConstants;
 
-import com.jgoodies.forms.factories.DefaultComponentFactory;
-
-import Restaurante_Completo.LeCartoon_Original.Buttons;
 import Restaurante_Completo.LeCartoon_Original.Costumer;
+import ui.theme.Tarjeta;
+import ui.theme.Theme;
 
-import javax.swing.JTextArea;
-
+/**
+ * Método de pago guardado (por ahora fijo; t21 lo traerá de la BD).
+ * El número se muestra enmascarado: una app nunca debe enseñar la tarjeta completa.
+ */
 public class Payment extends JPanel {
 
 	private static final long serialVersionUID = 1L;
 	private static JLabel name;
 
 	public Payment() {
-		setSize(1357, 672);
-		setLayout(new BorderLayout(0, 0));
-		
-		JPanel mainPanel = new JPanel();
-		mainPanel.setBackground(new Color(255, 255, 255));
-		add(mainPanel, BorderLayout.CENTER);
-		mainPanel.setLayout(null);
-		
-		JLabel lblInformacinPersonal = new JLabel("  Método de pago:");
-		lblInformacinPersonal.setIcon(new ImageIcon(Payment.class.getResource("/Restaurante_Completo/LeCartoon_Original/IMAGES/icons/money1.PNG")));
-		lblInformacinPersonal.setHorizontalAlignment(SwingConstants.CENTER);
-		lblInformacinPersonal.setForeground(Color.WHITE);
-		lblInformacinPersonal.setFont(new Font("SansSerif", Font.BOLD, 40));
-		lblInformacinPersonal.setBounds(391, 37, 550, 42);
-		mainPanel.add(lblInformacinPersonal);
-		
-		JLabel lblPruebagmailcom = new JLabel("05/26");
-		lblPruebagmailcom.setForeground(Color.WHITE);
-		lblPruebagmailcom.setFont(new Font("SansSerif", Font.BOLD, 40));
-		lblPruebagmailcom.setBounds(670, 510, 557, 42);
-		mainPanel.add(lblPruebagmailcom);
-		
-		JLabel lblEmail = new JLabel("  Vencimiento:");
-		lblEmail.setIcon(new ImageIcon(Payment.class.getResource("/Restaurante_Completo/LeCartoon_Original/IMAGES/icons/calendario.png")));
-		lblEmail.setForeground(Color.WHITE);
-		lblEmail.setFont(new Font("SansSerif", Font.BOLD, 40));
-		lblEmail.setBounds(107, 510, 477, 42);
-		mainPanel.add(lblEmail);
-		
-		name = new JLabel("Nombre + Apellido");
-		name.setForeground(new Color(255, 255, 255));
-		name.setFont(new Font("SansSerif", Font.BOLD, 40));
-		name.setBounds(670, 319, 557, 42);
-		mainPanel.add(name);
-		
-		JLabel lblNombreApellido = new JLabel("3784-2938-9302-9403");
-		lblNombreApellido.setForeground(Color.WHITE);
-		lblNombreApellido.setFont(new Font("SansSerif", Font.BOLD, 40));
-		lblNombreApellido.setBounds(670, 163, 557, 42);
-		mainPanel.add(lblNombreApellido);
-		
-		JLabel lblNewLabel = new JLabel("  Titular:");
-		lblNewLabel.setIcon(new ImageIcon(Payment.class.getResource("/Restaurante_Completo/LeCartoon_Original/IMAGES/icons/user.PNG")));
-		lblNewLabel.setFont(new Font("SansSerif", Font.BOLD, 40));
-		lblNewLabel.setForeground(new Color(255, 255, 255));
-		lblNewLabel.setBounds(107, 319, 477, 42);
-		mainPanel.add(lblNewLabel);
-		
-		JLabel lblNewJgoodiesLabel = DefaultComponentFactory.getInstance().createLabel("  Número de tarjeta:");
-		lblNewJgoodiesLabel.setIcon(new ImageIcon(Payment.class.getResource("/Restaurante_Completo/LeCartoon_Original/IMAGES/icons/card.png")));
-		lblNewJgoodiesLabel.setHorizontalAlignment(SwingConstants.LEFT);
-		lblNewJgoodiesLabel.setForeground(new Color(255, 255, 255));
-		lblNewJgoodiesLabel.setFont(new Font("SansSerif", Font.BOLD, 40));
-		lblNewJgoodiesLabel.setBounds(107, 163, 477, 42);
-		mainPanel.add(lblNewJgoodiesLabel);
-		
-		Buttons loginbutton_1_1 = new Buttons("", 70, 70, Color.BLACK, Color.BLACK);
-		loginbutton_1_1.setBounds(23, 24, 1309, 623);
-		loginbutton_1_1.setForeground(Color.WHITE);
-		loginbutton_1_1.setColorFondo(new Color(0, 0, 0));
-		mainPanel.add(loginbutton_1_1);
-		
-		Buttons loginbutton_1 = new Buttons("", 70, 70, Color.white, Color.white);
-		loginbutton_1.setBounds(10, 11, 1337, 650);
-		loginbutton_1.setForeground(Color.WHITE);
-		mainPanel.add(loginbutton_1);
-		
-		Buttons loginbutton = new Buttons("", 70, 70, Color.black, Color.black);
-		loginbutton.setBounds(0, 0, 1357, 672);
-		loginbutton.setForeground(Color.white);
-		mainPanel.add(loginbutton);
+		setOpaque(false);
+		setLayout(new BorderLayout());
 
+		// Tarjeta "física" en negro
+		Tarjeta plastico = new Tarjeta(null);
+		plastico.setBackground(Theme.TINTA);
+		plastico.setLayout(new BoxLayout(plastico, BoxLayout.Y_AXIS));
+		plastico.setPreferredSize(new Dimension(440, 250));
+		plastico.setMaximumSize(new Dimension(440, 250));
+		plastico.setBorder(BorderFactory.createCompoundBorder(plastico.getBorder(), BorderFactory.createEmptyBorder(8, 10, 8, 10)));
+
+		JLabel marca = Theme.etiqueta("VISA", Theme.titulo(26), Theme.BLANCO);
+		JLabel numero = Theme.etiqueta("•••• •••• •••• 9403", Theme.mono(26), Theme.BLANCO);
+		name = Theme.etiqueta("Nombre + Apellido", Theme.titulo(16), Theme.BLANCO);
+		JLabel vence = Theme.etiqueta("05/26", Theme.mono(16), Theme.BLANCO);
+
+		JPanel pie = new JPanel(new BorderLayout());
+		pie.setOpaque(false);
+		JPanel titular = new JPanel(new BorderLayout());
+		titular.setOpaque(false);
+		titular.add(Theme.etiqueta("TITULAR", Theme.mono(11), Theme.TERRACOTA), BorderLayout.NORTH);
+		titular.add(name, BorderLayout.CENTER);
+		JPanel vencimiento = new JPanel(new BorderLayout());
+		vencimiento.setOpaque(false);
+		vencimiento.add(Theme.etiqueta("VENCE", Theme.mono(11), Theme.TERRACOTA), BorderLayout.NORTH);
+		vencimiento.add(vence, BorderLayout.CENTER);
+		pie.add(titular, BorderLayout.WEST);
+		pie.add(vencimiento, BorderLayout.EAST);
+
+		for (javax.swing.JComponent c : new javax.swing.JComponent[] { marca, numero, pie }) c.setAlignmentX(LEFT_ALIGNMENT);
+		pie.setMaximumSize(new Dimension(Integer.MAX_VALUE, 50));
+		plastico.add(marca);
+		plastico.add(Box.createVerticalGlue());
+		plastico.add(numero);
+		plastico.add(Box.createVerticalStrut(18));
+		plastico.add(pie);
+
+		JLabel nota = Theme.etiqueta("Es la tarjeta con la que se cobran tus pedidos.", Theme.texto(14), Theme.GRAFITO);
+
+		JPanel contenido = ProfileScreen.columna(18, ProfileScreen.fila(0, plastico), nota);
+		add(ProfileScreen.seccion("Método de pago", "card.png", contenido), BorderLayout.CENTER);
 	}
-	
+
 	public static void changedCostumer(Costumer costumer) {
-		name.setText(costumer.getName() + " " + costumer.getLastName());
+		name.setText((costumer.getName() + " " + costumer.getLastName()).toUpperCase());
 	}
-
 }
