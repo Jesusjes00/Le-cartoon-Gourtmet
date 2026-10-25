@@ -64,12 +64,12 @@ public class Buttons extends JButton {
 
     // ══════════════ Fábricas ══════════════
 
-    /** Acción principal de confirmación (pizarra). */
-    public static Buttons primario(String texto)   { return accion(texto, Theme.PIZARRA); }
-    /** LA acción más importante de la pantalla (mostaza). Solo una por pantalla. */
-    public static Buttons acento(String texto)     { return accion(texto, Theme.MOSTAZA); }
-    /** Acción alternativa (crema). */
-    public static Buttons secundario(String texto) { return accion(texto, Theme.CREMA); }
+    /** Acción principal de confirmación (negro). */
+    public static Buttons primario(String texto)   { return accion(texto, Theme.TINTA); }
+    /** LA acción más importante de la pantalla (terracota). Solo una por pantalla. */
+    public static Buttons acento(String texto)     { return accion(texto, Theme.TERRACOTA); }
+    /** Acción alternativa (blanco). */
+    public static Buttons secundario(String texto) { return accion(texto, Theme.BLANCO); }
     /** Borrar, quitar, salir (ladrillo; hover vino). */
     public static Buttons peligro(String texto) {
         Buttons b = accion(texto, Theme.LADRILLO);
@@ -79,12 +79,12 @@ public class Buttons extends JButton {
     /** Acción con el color del estado del pedido (viene del patrón State). */
     public static Buttons estado(String texto, Color colorEstado) { return accion(texto, colorEstado); }
 
-    /** Pestaña de menú: plana; hover = mostaza; seleccionada = barra mostaza abajo. */
+    /** Pestaña de menú: plana; hover = terracota; seleccionada = barra terracota abajo. */
     public static Buttons nav(String texto, Color fondoBarra) {
-        Buttons b = new Buttons(texto, 0, 0, fondoBarra, Theme.MOSTAZA);
+        Buttons b = new Buttons(texto, 0, 0, fondoBarra, Theme.TERRACOTA);
         b.estilo = Estilo.NAV;
         b.setForeground(textoSobre(fondoBarra));
-        b.colorTextoHover = Theme.TINTA;
+        b.colorTextoHover = textoSobre(Theme.TERRACOTA);
         b.setFont(Theme.titulo(16));
         b.setCursor(MANO);
         return b;
@@ -92,7 +92,7 @@ public class Buttons extends JButton {
 
     /** Minimizar / cerrar ventana: borde 2 px, sin sombra. */
     public static Buttons control(String texto, Color fondoBarra, boolean esCerrar) {
-        Color hover = esCerrar ? Theme.LADRILLO : Theme.MOSTAZA;
+        Color hover = esCerrar ? Theme.LADRILLO : Theme.TERRACOTA;
         Buttons b = new Buttons(texto, 0, 0, fondoBarra, hover);
         b.estilo = Estilo.CONTROL;
         b.setForeground(textoSobre(fondoBarra));
@@ -104,7 +104,7 @@ public class Buttons extends JButton {
 
     /** Dato que no se clica (ej. "12 PEDIDOS"): mono, borde 2 px, plano. */
     public static Buttons chip(String texto) {
-        Buttons b = new Buttons(texto, 0, 0, Theme.CREMA, Theme.CREMA);
+        Buttons b = new Buttons(texto, 0, 0, Theme.BLANCO, Theme.BLANCO);
         b.estilo = Estilo.CHIP;
         b.setForeground(Theme.TINTA);
         b.setFont(Theme.mono(14));
@@ -175,13 +175,13 @@ public class Buttons extends JButton {
         g2.dispose();
     }
 
-    /** Pestaña: plana, hover mostaza, barra mostaza si está seleccionada. */
+    /** Pestaña: plana, hover terracota, barra terracota si está seleccionada. */
     private void pintarNav(Graphics g) {
         Graphics2D g2 = (Graphics2D) g.create();
         g2.setColor(mouseOver ? colorHover : colorFondo);
         g2.fillRect(0, 0, getWidth(), getHeight());
         if (seleccionado) {
-            g2.setColor(Theme.MOSTAZA);
+            g2.setColor(Theme.TERRACOTA);
             g2.fillRect(0, getHeight() - 4, getWidth(), 4);
         }
         g2.dispose();
@@ -204,13 +204,15 @@ public class Buttons extends JButton {
     // ══════════════ Utilidades ══════════════
 
     private static Color oscurecer(Color c) {      // hover de las acciones: 15 % más oscuro
+        if (c.getRed() + c.getGreen() + c.getBlue() < 120) {   // el negro no se puede oscurecer: se aclara
+            return new Color(c.getRed() + 40, c.getGreen() + 40, c.getBlue() + 40);
+        }
         return new Color((int) (c.getRed() * 0.85), (int) (c.getGreen() * 0.85), (int) (c.getBlue() * 0.85));
     }
 
-    /** Texto legible sobre un fondo: tinta si el fondo es claro, crema si es oscuro. */
+    /** Texto legible sobre un fondo: tinta si el fondo es claro, blanco si es oscuro. */
     private static Color textoSobre(Color fondo) {
-        double luz = 0.299 * fondo.getRed() + 0.587 * fondo.getGreen() + 0.114 * fondo.getBlue();
-        return luz > 150 ? Theme.TINTA : Theme.CREMA;
+        return Theme.textoSobre(fondo);          // una sola regla para toda la app
     }
 
     /** Cambia el color del texto sin perder el color "en reposo" (lo usa el hover). */
@@ -253,4 +255,4 @@ public class Buttons extends JButton {
 
     public boolean isMouseOver() { return mouseOver; }
     public void setMouseOver(boolean mouseOver) { this.mouseOver = mouseOver; }
-}
+}
