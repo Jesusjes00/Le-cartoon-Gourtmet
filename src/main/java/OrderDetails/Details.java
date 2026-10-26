@@ -28,6 +28,7 @@ import Restaurante_Completo.LeCartoon_Original.Delivered;
 import Restaurante_Completo.LeCartoon_Original.Main_Frame;
 import Restaurante_Completo.LeCartoon_Original.Order;
 import Restaurante_Completo.LeCartoon_Original.OrderDetails;
+import Restaurante_Completo.LeCartoon_Original.Resena;
 import Restaurante_Completo.LeCartoon_Original.Restaurant;
 import persistence.DaoException;
 import ui.Toast;
@@ -55,6 +56,11 @@ public class Details extends JPanel {
 	private JTextArea textState;
 	private Buttons simState;
 	private int anchoGif;                    // el GIF es el protagonista: crece con la pantalla
+	private JPanel huecoResena;              // debajo de la tarjeta de estado; se llena al estar Entregado
+
+	// PROVISIONAL hasta c04: las reseñas viven en memoria mientras exista la app.
+	// En c04 esto se cambia por Restaurant.getInstance().resenaDe(id) / calificar(...) contra Couchbase.
+	private static final java.util.Map<Integer, Resena> RESENAS = new java.util.HashMap<>();
 
 	public Details(ArrayList<OrderDetails> orderlist, Order order) {
 		this.orderlist = orderlist;
@@ -110,10 +116,22 @@ public class Details extends JPanel {
 		c.fill = GridBagConstraints.BOTH;
 		c.weighty = 1;
 
+		// Columna izquierda: tarjeta de estado y, abajo, la reseña (solo si ya se entregó)
+		JPanel izquierda = new JPanel();
+		izquierda.setOpaque(false);
+		izquierda.setLayout(new BoxLayout(izquierda, BoxLayout.Y_AXIS));
+		JComponent estado = crearTarjetaEstado();
+		huecoResena = new JPanel(new BorderLayout());
+		huecoResena.setOpaque(false);
+		estado.setAlignmentX(LEFT_ALIGNMENT);
+		huecoResena.setAlignmentX(LEFT_ALIGNMENT);
+		izquierda.add(estado);
+		izquierda.add(huecoResena);
+
 		c.gridx = 0;
 		c.weightx = 0.68;
 		c.insets = new Insets(0, 0, 0, 28);
-		columnas.add(alArriba(crearTarjetaEstado()), c);
+		columnas.add(alArriba(izquierda), c);
 
 		c.gridx = 1;
 		c.weightx = 0.32;
@@ -249,6 +267,18 @@ public class Details extends JPanel {
 		this.order = order;
 	}
 
+	/** Solo un pedido entregado se puede calificar. La tarjeta aparece debajo del estado. */
+	private void mostrarResena(boolean entregado) {
+		if (!entregado || huecoResena.getComponentCount() > 0) return;
+		ResenaPanel panel = new ResenaPanel(RESENAS.get(order.getId()), r -> {
+			RESENAS.put(order.getId(), r);       // c04: aquí va la llamada que guarda en Couchbase (try/catch DaoException → false)
+			Toast.exito(Details.this, "¡Gracias! Tu reseña de " + r.getEstrellas() + (r.getEstrellas() == 1 ? " estrella" : " estrellas") + " se envió");
+			return true;
+		});
+		huecoResena.setBorder(BorderFactory.createEmptyBorder(24, 0, 0, 0));
+		huecoResena.add(panel, BorderLayout.CENTER);
+	}
+
 	/** Repinta todo con el color, GIF y mensaje del estado actual (los da el patrón State). */
 	public void updateGraphics(Order order) {
 		Color fondo = order.getColor();
@@ -267,6 +297,7 @@ public class Details extends JPanel {
 		boolean entregado = order.getState() instanceof Delivered;
 		estimacion.setText(entregado ? "PEDIDO ENTREGADO" : "HORA ESTIMADA DE ENTREGA");
 		simState.setVisible(!entregado);          // ya no hay siguiente estado
+		mostrarResena(entregado);
 
 		badgeEstado.setText(order.actualState().toUpperCase());
 		badgeEstado.setBackground(fondo);

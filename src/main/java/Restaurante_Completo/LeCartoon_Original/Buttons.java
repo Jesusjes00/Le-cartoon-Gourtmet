@@ -22,6 +22,7 @@ public class Buttons extends JButton {
     public enum Estilo { CLASICO, ACCION, NAV, CONTROL, CHIP }
 
     private static final Cursor MANO = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR);
+    private static final Color DESHABILITADO = new Color(0xD9D9D9);   // cara de un botón ACCION deshabilitado
 
     private Estilo estilo = Estilo.CLASICO;
     private int arcWidth = 20;
@@ -168,8 +169,9 @@ public class Buttons extends JButton {
         }
         g2.setColor(colorBordeCustom != null ? colorBordeCustom : Theme.TINTA);
         g2.fillRect(off, off, w, h);                          // 2. borde
-        g2.setColor(mouseOver ? colorHover : colorFondo);
-        g2.fillRect(off + b, off + b, w - 2 * b, h - 2 * b);  // 3. cara
+        Color cara = !isEnabled() ? DESHABILITADO : (mouseOver ? colorHover : colorFondo);
+        g2.setColor(cara);
+        g2.fillRect(off + b, off + b, w - 2 * b, h - 2 * b);  // 3. cara (gris si está deshabilitado)
         g2.translate(off - s / 2, off - s / 2);               // 4. texto centrado en la cara
         super.paintComponent(g2);
         g2.dispose();
