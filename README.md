@@ -34,6 +34,8 @@ Aplicación de escritorio en Java para pedir platillos de *Hora de Aventura*, *U
 12. [Equipo](#equipo)
 13. [Aviso](#aviso)
 
+> 📘 **¿Quieres saber cómo funciona cada clase?** La [referencia técnica](docs/REFERENCIA_TECNICA.md) explica clase por clase, con sus constructores, métodos, interfaces y los flujos completos (login, pedido, cambio de estado y reseña).
+
 ---
 
 ## Sobre el proyecto
@@ -120,6 +122,8 @@ flowchart TD
     R -. c02–c04 .-> CB
     WEB -. lectura .-> CB
 ```
+
+> El detalle de cada clase y método está en la [referencia técnica](docs/REFERENCIA_TECNICA.md).
 
 **Reglas que sigue el código**
 
