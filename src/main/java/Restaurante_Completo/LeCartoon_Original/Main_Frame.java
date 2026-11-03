@@ -196,10 +196,10 @@ public class Main_Frame {
 		entrega.setOpaque(false);
 		entrega.setLayout(new BoxLayout(entrega, BoxLayout.Y_AXIS));
 		String direccion = Restaurant.getInstance().getCliente().getAddress();
-		JLabel lblTitulo = Theme.etiqueta("ENTREGAR EN", Theme.mono(11), Theme.TERRACOTA);
+		//JLabel lblTitulo = Theme.etiqueta("ENTREGAR EN", Theme.mono(11), Theme.TERRACOTA);
 		JLabel lblDireccion = Theme.etiqueta(recortar(direccion, 24), Theme.titulo(14), Theme.BLANCO);
 		lblDireccion.setToolTipText(direccion);
-		entrega.add(lblTitulo);
+		//entrega.add(lblTitulo);
 		entrega.add(Box.createVerticalStrut(2));
 		entrega.add(lblDireccion);
 		c.gridx = 0;
