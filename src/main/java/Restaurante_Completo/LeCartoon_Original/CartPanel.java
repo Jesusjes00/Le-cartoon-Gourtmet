@@ -251,7 +251,7 @@ public class CartPanel extends JPanel {
         card.setOpaque(false);
         card.setBorder(new EmptyBorder(14, 0, 14, 0));
 
-        // Foto real del platillo (antes era un recuadro gris con un emoji)
+        // Foto real del platillo 
         Imagen foto = new Imagen(platillo.getImage(), true);
         foto.setPreferredSize(new Dimension(132, 70));
         JPanel marcoFoto = new JPanel(new BorderLayout());
@@ -279,7 +279,7 @@ public class CartPanel extends JPanel {
         controles.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         Buttons btnMenos = Buttons.secundario("−");
-        btnMenos.setPreferredSize(new Dimension(42, 40));
+        btnMenos.setPreferredSize(new Dimension(50, 40));
         btnMenos.setToolTipText(cantidad == 1 ? "Quitar del carrito" : "Quitar uno");
         btnMenos.addActionListener(e -> {                   // en 1, bajar = quitar (lo decide Carrito)
             Carrito.cambiarCantidad(id, cantidad - 1);
@@ -291,7 +291,7 @@ public class CartPanel extends JPanel {
         lblCantidad.setPreferredSize(new Dimension(36, 34));
 
         Buttons btnMas = Buttons.secundario("+");
-        btnMas.setPreferredSize(new Dimension(42, 40));
+        btnMas.setPreferredSize(new Dimension(50, 40));
         btnMas.setToolTipText("Agregar uno");
         btnMas.addActionListener(e -> {
             Carrito.cambiarCantidad(id, cantidad + 1);
