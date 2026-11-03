@@ -22,8 +22,8 @@ public class Addresses extends JPanel {
 		setLayout(new BorderLayout());
 
 		JPanel lista = ProfileScreen.columna(14,
-				direccion(address1, true),
-				direccion("Av. Benjamín Franklin 45, Colonia Condesa, Cuauhtémoc, 06140 Ciudad de México, CDMX", false));
+				direccion(address1, true));
+				
 
 		add(ProfileScreen.seccion("Mis direcciones", "location1.png", lista), BorderLayout.CENTER);
 	}

@@ -62,13 +62,13 @@ public class Register_Window {
 		Acceso.agregarCampo(form, "Teléfono", txtnumber);
 		Acceso.agregarCampo(form, "Correo electrónico", txtemail);
 		Acceso.agregarCampo(form, "Contraseña", txtpass);
-		Acceso.agregarCampo(form, "Domicilio", txtadd);
+		//Acceso.agregarCampo(form, "Domicilio", txtadd);
 		form.add(Box.createVerticalStrut(6));
 
 		Buttons loginbutton = Buttons.primario("Crear cuenta");
 		loginbutton.setPreferredSize(new Dimension(380, 48 + Theme.SOMBRA));
 		loginbutton.addActionListener(e -> {
-			if (!Acceso.validarLlenos(txtName, txtlastname, txtnumber, txtemail, txtpass, txtadd)) {
+			if (!Acceso.validarLlenos(txtName, txtlastname, txtnumber, txtemail, txtpass)) {
 				Toast.aviso(frame, "Completa los campos marcados");
 				return;
 			}
@@ -79,7 +79,7 @@ public class Register_Window {
 			String Email = txtemail.getText().trim();
 			String Add = txtadd.getText().trim();
 			try {
-			    Costumer nuevo = new Costumer(user, lastname_tx, number_prev, Email, password_prev, Add);
+			    Costumer nuevo = new Costumer(user, lastname_tx, number_prev, Email, password_prev, " ");
 			    Costumer cliente = Restaurant.getInstance().registrar(nuevo);
 
 			    Main_Frame principal_window = new Main_Frame();
