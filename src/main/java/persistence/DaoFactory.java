@@ -2,6 +2,8 @@ package persistence;
 
 import persistence.sqlite.SqliteCustomerDao;
 import persistence.sqlite.SqliteOrderDao;
+import persistence.oracle.OracleCustomerDao;
+import persistence.oracle.OracleOrderDao;
 
 
  //lugar que decide qué implementación de DAO usa la app.
@@ -15,16 +17,10 @@ public final class DaoFactory {
     }
 
     public static CustomerDao clientes() {
-        if (esOracle()) {
-            throw new UnsupportedOperationException("OracleCustomerDao llega en o04");
-        }
-        return new SqliteCustomerDao();
+        return esOracle() ? new OracleCustomerDao() : new SqliteCustomerDao();
     }
 
     public static OrderDao pedidos() {
-        if (esOracle()) {
-            throw new UnsupportedOperationException("OracleOrderDao llega en o05");
-        }
-        return new SqliteOrderDao();
+        return esOracle() ? new OracleOrderDao() : new SqliteOrderDao();
     }
 }
