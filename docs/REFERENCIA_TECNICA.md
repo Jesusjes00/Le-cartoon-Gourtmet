@@ -60,7 +60,7 @@ sequenceDiagram
 | `Dishes` | Clase base `Dishes` y 28 platillos | — |
 | `Franchises` | Clase base `Franchises` y 5 franquicias | — |
 | `persistence` | Conexión, fábrica de DAO, interfaces DAO y excepción | modelo |
-| `persistence.sqlite` | Implementación de los DAO para SQLite | `persistence` |
+| `persistence.oracle` | Implementación de los DAO para Oracle 19c (esquema de Alan) | `persistence` |
 | `OrderDetails` | Pantalla de seguimiento, *stepper*, estrellas y reseña | núcleo, `ui.theme` |
 | `ProfileScreens` | Perfil y sus secciones | núcleo, `ui.theme` |
 | `ui` | `Toast` (avisos flotantes) | `ui.theme` |
@@ -78,6 +78,8 @@ classDiagram
       +misPedidos() List~Order~
       +registrarPedido(total, items) int
       +cambiarEstado(Order)
+      +resenaDe(idPedido) Resena
+      +calificar(idPedido, Resena)
     }
     class DaoFactory {
       <<Factory>>
@@ -96,9 +98,11 @@ classDiagram
       +detallesDe(idPedido) List~OrderDetails~
       +cambiarEstado(idPedido, estado)
       +registrar(idCliente, total, items) int
+      +resenaDe(idPedido) Resena
+      +calificar(idPedido, Resena)
     }
-    class SqliteCustomerDao
-    class SqliteOrderDao
+    class OracleCustomerDao
+    class OracleOrderDao
     class ConnectionFactory {
       +getConnection() Connection
     }
@@ -112,10 +116,10 @@ classDiagram
     Restaurant --> DaoFactory : pide los DAO
     Restaurant --> CustomerDao
     Restaurant --> OrderDao
-    CustomerDao <|.. SqliteCustomerDao
-    OrderDao <|.. SqliteOrderDao
-    SqliteCustomerDao --> ConnectionFactory
-    SqliteOrderDao --> ConnectionFactory
+    CustomerDao <|.. OracleCustomerDao
+    OrderDao <|.. OracleOrderDao
+    OracleCustomerDao --> ConnectionFactory
+    OracleOrderDao --> ConnectionFactory
     Order --> State
     State <|.. Preparing
     State <|.. Sent
@@ -164,6 +168,8 @@ Clase con el `main` de la aplicación.
 | `detallesDe(int idPedido)` | Renglones del pedido (`OrderDetails`). |
 | `cambiarEstado(Order pedido)` | Guarda `pedido.getId_state()` en la base de datos. |
 | `registrarPedido(double total, List<ItemPedido> items)` | Exige sesión y que el carrito no esté vacío (si lo está, lanza `IllegalArgumentException`). Guarda el pedido y sus renglones en una transacción y regresa el id del pedido. |
+| `resenaDe(int idPedido)` | Reseña guardada del pedido, o `null` si todavía no lo califican. |
+| `calificar(int idPedido, Resena resena)` | **Exige sesión.** Guarda la reseña en el pedido (solo si está entregado y no tenía reseña). |
 | *privado* `exigirSesion()` | Lanza `IllegalStateException` si no hay cliente. |
 
 ---
@@ -215,7 +221,7 @@ Métodos: *getters* y *setters* de `id`, `name`, `lastName`, `phone`, `email`, `
 | `subtotal()` | Importe **sin IVA**: `total / 1.16`. Los precios del menú ya incluyen IVA. |
 | `iva()` | `importePlatillos() − subtotal()`. Se calcula por diferencia para que siempre cuadre al centavo. |
 | `envio()` | `35.00` si hay algo en el carrito; `0` si está vacío. |
-| `totalAPagar()` | `importePlatillos() + envio()`. **Es lo que se guarda en `ORDERS.PRICE`.** |
+| `totalAPagar()` | `importePlatillos() + envio()`. **Es lo que el cliente paga.** Oracle no lo guarda: `OracleOrderDao.pedidosDe` lo recalcula igual (platillos + envío). |
 | `getPedidos()` | La lista de renglones. |
 
 ---
@@ -249,7 +255,7 @@ Pedido ya registrado. Contiene un objeto `State` que cambia según la etapa (ver
 
 ### `OrderDetails`
 
-Un renglón de un pedido **ya guardado**, tal como lo regresa la base de datos con `JOIN` a `DISHES`.
+Un renglón de un pedido **ya guardado**, tal como lo regresa la base de datos con `JOIN` a `PLATILLO`.
 
 | Miembro | Qué hace |
 |---|---|
@@ -264,11 +270,11 @@ Reseña de un pedido entregado. Es **inmutable**: todos sus campos son `final` y
 
 | Miembro | Qué hace |
 |---|---|
-| `static final int MAX_COMENTARIO = 500` | Largo máximo del comentario. |
-| `Resena(int estrellas, String comentario, LocalDateTime fecha)` | **Valida:** las estrellas deben ir de 1 a 5 y el comentario no puede pasar de 500 caracteres; si no, lanza `IllegalArgumentException`. El comentario se recorta (`trim`) y un `null` se vuelve `""`. |
+| `static final int MAX_COMENTARIO = 300` | Largo máximo del comentario: igual que `PEDIDO.RESENA`, que es `VARCHAR2(300 CHAR)`. |
+| `Resena(int estrellas, String comentario, LocalDateTime fecha)` | **Valida:** las estrellas deben ir de 1 a 5 y el comentario no puede pasar de 300 caracteres; si no, lanza `IllegalArgumentException`. El comentario se recorta (`trim`) y un `null` se vuelve `""`. |
 | `getEstrellas()` | `int` de 1 a 5. |
 | `getComentario()` | Nunca regresa `null`. |
-| `getFecha()` | Momento en que se envió. |
+| `getFecha()` | Momento en que se envió. Al leerla de Oracle es `PEDIDO.FECHA_ACTUALIZACION`; puede ser `null` en las reseñas de los datos semilla. |
 
 ---
 
@@ -376,18 +382,19 @@ Cada platillo es una subclase con un constructor sin parámetros que llama a `su
 
 | Miembro | Qué hace |
 |---|---|
-| bloque `static { … }` | Al cargar la clase, lee `db.properties` y resuelve `URL`, `USER` y `PASSWORD`. Si `db.url` queda vacío, lanza `IllegalStateException`. |
+| bloque `static { … }` | Al cargar la clase, lee `db.properties` y resuelve `URL`, `USER` y `PASSWORD`. Si `db.url` no empieza con `jdbc:oracle:`, lanza `IllegalStateException`: la app solo trabaja con Oracle. |
 | *privado* `leer(Properties, String clave)` | Busca la clave en orden: **`-Dclave`** → variable de entorno **`LECARTOON_CLAVE`** (por ejemplo `db.user` → `LECARTOON_DB_USER`) → `db.properties`. |
-| **`static`** `getConnection()` | Abre la conexión (con o sin usuario). En SQLite además ejecuta `PRAGMA foreign_keys = ON`, porque SQLite no revisa las llaves foráneas si no se le pide. |
-| **`static`** `describir()` | Regresa la URL. La usan `DaoFactory` y `PruebaConexion`. |
+| **`static`** `getConnection()` | Abre la conexión con usuario y contraseña. Si no hay usuario, lanza `SQLException` pidiendo definir `LECARTOON_DB_USER` y `LECARTOON_DB_PASSWORD`. |
+| **`static`** `describir()` | Regresa la URL. La usa `PruebaConexion`. |
 
 ### `DaoFactory` · *Factory*
 
 | Método | Qué hace |
 |---|---|
-| **`static`** `esOracle()` | `true` si la URL empieza con `jdbc:oracle:`. |
-| **`static`** `clientes()` | Regresa un `CustomerDao`: hoy `SqliteCustomerDao`. Con una URL de Oracle lanza `UnsupportedOperationException` hasta que exista `OracleCustomerDao`. |
-| **`static`** `pedidos()` | Igual, para `OrderDao`. |
+| **`static`** `clientes()` | Regresa un `OracleCustomerDao`. |
+| **`static`** `pedidos()` | Regresa un `OracleOrderDao`. |
+
+Es el único lugar que conoce las clases concretas: `Restaurant` y las pantallas solo ven las interfaces.
 
 ### Interfaz `CustomerDao`
 
@@ -403,40 +410,49 @@ Cada platillo es una subclase con un constructor sin parámetros que llama a `su
 |---|---|
 | `List<Order> pedidosDe(int idCliente)` | Pedidos del cliente, del más reciente al más viejo. **Lista vacía, nunca `null`.** |
 | `List<OrderDetails> detallesDe(int idPedido)` | Renglones del pedido. |
-| `void cambiarEstado(int idPedido, int estado)` | Guarda el nuevo `STATE`. |
+| `void cambiarEstado(int idPedido, int estado)` | Guarda el nuevo estado (`ID_STATUS`). |
 | `int registrar(int idCliente, double total, List<ItemPedido> items)` | Inserta el pedido y sus renglones **en una sola transacción** y regresa el id del pedido. |
+| `Resena resenaDe(int idPedido)` | Reseña del pedido; `null` si todavía no lo califican. |
+| `void calificar(int idPedido, Resena resena)` | Guarda la reseña. Solo pedidos entregados y solo una vez; si no se puede, lanza `DaoException`. |
 
 ### `DaoException`
 
 `extends RuntimeException` (*unchecked*). Constructor `DaoException(String mensaje, Throwable causa)`: el mensaje es para humanos y la causa conserva la `SQLException` original para depurar. Al ser *unchecked*, las interfaces DAO no se ensucian con `throws SQLException`, que es algo propio de JDBC.
 
-### `persistence.sqlite.SqliteCustomerDao`
+### `persistence.oracle.OracleCustomerDao`
 
-| Método | SQL |
-|---|---|
-| `login` | `SELECT … FROM COSTUMERS WHERE EMAIL = ? AND PASSWORD = ?` |
-| `registrar` | `INSERT INTO COSTUMERS (…) VALUES (?, ?, ?, ?, ?, ?)` con `RETURN_GENERATED_KEYS` para obtener el id. |
-| `actualizarPerfil` | `UPDATE COSTUMERS SET NAME = ?, LASTNAME = ?, PHONE = ? WHERE ID = ?`. Si no afecta ningún renglón, lanza `DaoException`. |
-| *privado* `mapear(ResultSet)` | Convierte un renglón en `Costumer`. |
-
-Todas las consultas usan **`PreparedStatement` con `?`**: los valores nunca se concatenan al SQL, así que no hay riesgo de inyección SQL.
-
-### `persistence.sqlite.SqliteOrderDao`
+Un cliente de la app se reparte en tres tablas: `CLIENTE` (correo y contraseña), `PERSONA` (nombre y apellidos) y `TELEFONO`.
 
 | Método | Cómo funciona |
 |---|---|
-| `pedidosDe` | `SELECT … FROM ORDERS WHERE COSTUMER = ? ORDER BY ID DESC`. Crea cada `Order` con su `id_state`. |
-| `detallesDe` | `ORDERSDETAILS JOIN DISHES` para traer el **nombre** del platillo en una sola consulta. |
-| `cambiarEstado` | `UPDATE ORDERS SET STATE = ? WHERE ID = ?`. Si no existe el pedido, lanza `DaoException`. |
-| `registrar` | `setAutoCommit(false)` → `insertarPedido` → `insertarDetalles` → `commit()`. Ante cualquier error hace **`rollback()`**: se guarda todo o nada. |
-| *privado* `insertarPedido(Connection, …)` | `INSERT INTO ORDERS (COSTUMER, PRICE, STATE) VALUES (?, ?, 1)` y regresa el id generado. |
+| `login` | `CLIENTE JOIN PERSONA`, con el teléfono en una subconsulta `MIN(...)` para que siempre salga una sola fila. El `id` del `Costumer` es `ID_CLIENTE`. |
+| `registrar` | Transacción: `INSERT PERSONA` → `INSERT CLIENTE` → `INSERT TELEFONO` (si lo dio). Cada id lo pone su secuencia + *trigger*, y Java lo recupera con `prepareStatement(sql, new String[] { "ID_PERSONA" })`. Si el correo ya existe (`ORA-00001`), lanza `DaoException("Ese correo ya está registrado")`. |
+| `actualizarPerfil` | Transacción: `UPDATE PERSONA` y `UPDATE TELEFONO` (o `INSERT` si no tenía), llegando al `ID_PERSONA` con una subconsulta desde `ID_CLIENTE`. |
+| *privados* `separarApellidos` / `juntarApellidos` | La app maneja un solo `lastName`; se parte en el primer espacio en `APELLIDOPATERNO` y `APELLIDOMATERNO`. |
+
+Todas las consultas usan **`PreparedStatement` con `?`**: los valores nunca se concatenan al SQL, así que no hay riesgo de inyección SQL.
+
+### `persistence.oracle.OracleOrderDao`
+
+| Método | Cómo funciona |
+|---|---|
+| `pedidosDe` | `PEDIDO` del cliente, del más nuevo al más viejo. El total no está guardado: se calcula con `SUM(cantidad × precio)` de sus renglones + `Carrito.ENVIO`. |
+| `detallesDe` | `DETALLES_PEDIDO JOIN PLATILLO` para traer el **nombre** del platillo en una sola consulta. |
+| `cambiarEstado` | `UPDATE PEDIDO SET ID_STATUS = ?, FECHA_ACTUALIZACION = SYSDATE`. Al pasar a **Enviado** asigna un repartidor de la sucursal si no tenía. |
+| `registrar` | `setAutoCommit(false)` → sucursal del cliente (`SUCURSAL_CLIENTE`, o la 1) → `insertarPedido` → `insertarDetalles` → `commit()`. Ante cualquier error hace **`rollback()`**: se guarda todo o nada. |
+| `resenaDe` | `SELECT CALIFICACION, RESENA, FECHA_ACTUALIZACION FROM PEDIDO`. Si `CALIFICACION` es `NULL`, regresa `null`. |
+| `calificar` | `UPDATE PEDIDO SET CALIFICACION = ?, RESENA = ?, FECHA_ACTUALIZACION = SYSDATE WHERE ID_PEDIDO = ? AND ID_STATUS = 3 AND CALIFICACION IS NULL`. Un comentario vacío se guarda como `NULL`. El *trigger* `TRG_AUD_PEDIDO` deja la reseña en `PEDIDO_H`. |
 | *privado* `insertarDetalles(Connection, …)` | Un renglón por platillo con **`addBatch()` / `executeBatch()`**: todos se mandan juntos a la base de datos. |
 
 Los métodos privados **reciben la misma `Connection`**: la transacción vive en la conexión, así que todos los `INSERT` deben usar la misma.
 
 ### `PruebaConexion`
 
-`main` independiente para probar la conexión configurada. Pone un *timeout* de 10 s, ejecuta `SELECT USER, SYSDATE FROM DUAL` e imprime el tiempo, el usuario, la hora del servidor, la versión de la base de datos y la del driver. **La consulta es de Oracle**: con SQLite falla, porque SQLite no tiene `DUAL`.
+`main` independiente para probar la conexión configurada. Pone un *timeout* de 10 s, ejecuta `SELECT USER, SYSDATE FROM DUAL` e imprime el tiempo, el usuario, la hora del servidor, la versión de la base de datos y la del driver.
+
+### `PruebaClientes`
+
+`main` independiente que prueba `OracleCustomerDao.login` con un cliente de los datos semilla.
 
 ---
 
@@ -564,7 +580,7 @@ Otros métodos: `setColorFondo(Color)` (en ACCION también ajusta el *hover* y e
 3. **Solo si se guardó**, `order.changeState()` avanza el patrón State y se repinta.
 4. Si falla (`DaoException`), `id_state` regresa al valor anterior.
 
-**Reseñas (provisional hasta c04):** se guardan en `private static final Map<Integer, Resena> RESENAS`, en memoria: duran mientras la app está abierta. En c04 se reemplaza por el guardado en Couchbase.
+**Reseñas:** viven en Oracle. `mostrarResena` pide `Restaurant.resenaDe(id)`; al enviar llama a `Restaurant.calificar(id, resena)`. Si falla (`DaoException`), muestra un aviso y regresa `false`, así `ResenaPanel` se queda en modo formulario y el cliente no pierde lo que escribió.
 
 **Hora estimada:** `LocalTime.now() + 30 min`, calculada al abrir la pantalla. No se guarda en ningún lado.
 
@@ -599,9 +615,9 @@ Renglón del detalle: cantidad en un recuadro ("1×") y nombre del platillo. Con
 | Miembro | Qué hace |
 |---|---|
 | `ResenaPanel(Resena existente, Predicate<Resena> alEnviar)` | Si `existente` es `null`, muestra el formulario; si no, la reseña en modo lectura. `alEnviar` guarda la reseña y regresa `true` si se pudo. |
-| *privado* `mostrarFormulario()` | Estrellas con su texto ("Muy malo" … "¡Excelente!"), comentario con *placeholder* dibujado a mano, contador "n / 500" y "Enviar reseña", deshabilitado hasta elegir estrellas. |
+| *privado* `mostrarFormulario()` | Estrellas con su texto ("Muy malo" … "¡Excelente!"), comentario con *placeholder* dibujado a mano, contador "n / 300" y "Enviar reseña", deshabilitado hasta elegir estrellas. |
 | *privado* `mostrarLectura(Resena)` | Estrellas fijas, el comentario entre comillas y "ENVIADA EL …". |
-| clase interna `Limite extends DocumentFilter` | Impide escribir o pegar más de 500 caracteres. |
+| clase interna `Limite extends DocumentFilter` | Impide escribir o pegar más de 300 caracteres. |
 
 ---
 
@@ -718,8 +734,8 @@ sequenceDiagram
     participant K as Carrito
     participant CP as CartPanel
     participant R as Restaurant
-    participant D as SqliteOrderDao
-    participant DB as Base de datos
+    participant D as OracleOrderDao
+    participant DB as Oracle
 
     C->>P: elige cantidad y "Añadir al carrito"
     P->>K: agregarAlCarrito(platillo, n)
@@ -728,7 +744,7 @@ sequenceDiagram
     CP->>R: registrarPedido(Carrito.totalAPagar(), items)
     R->>R: exigirSesion() y revisa que haya items
     R->>D: registrar(idCliente, total, items)
-    D->>DB: BEGIN · INSERT ORDERS · INSERT ORDERSDETAILS (batch) · COMMIT
+    D->>DB: INSERT PEDIDO · INSERT DETALLES_PEDIDO (batch) · COMMIT
     DB-->>D: id del pedido
     D-->>R: id
     R-->>CP: id
@@ -736,7 +752,7 @@ sequenceDiagram
     CP->>C: Toast "Tu pedido #id fue realizado" y regresa al inicio
 ```
 
-Si falla algún `INSERT`, `SqliteOrderDao` hace **`rollback`** y lanza `DaoException`. `CartPanel` la atrapa, muestra el error y **no** vacía el carrito.
+Si falla algún `INSERT`, `OracleOrderDao` hace **`rollback`** y lanza `DaoException`. `CartPanel` la atrapa, muestra el error y **no** vacía el carrito.
 
 ### Avanzar el estado y reseñar
 
@@ -761,6 +777,8 @@ sequenceDiagram
     C->>RP: elige estrellas, escribe y da "Enviar reseña"
     RP->>RP: new Resena(estrellas, comentario, ahora)  (valida 1–5)
     RP->>D: alEnviar.test(resena)
+    D->>R: calificar(idPedido, resena)
+    R->>R: UPDATE PEDIDO (calificación y reseña)
     D-->>RP: true  (guardada)
     RP->>RP: mostrarLectura(resena)
 ```
@@ -776,22 +794,15 @@ sequenceDiagram
 | Acción sin sesión | `IllegalStateException` desde `Restaurant.exigirSesion()`. |
 | Campos vacíos en formularios | Se marcan en rojo con la propiedad `JComponent.outline` de FlatLaf; no se llama a la base de datos. |
 | Imagen que no existe | `Imagen` y `PromoCard` pintan un bloque gris en lugar de tronar. |
-| Motor Oracle sin DAO todavía | `UnsupportedOperationException` desde `DaoFactory`, con la tarea pendiente en el mensaje. |
+| Sin usuario de Oracle configurado | `getConnection()` lanza `SQLException` pidiendo `LECARTOON_DB_USER` y `LECARTOON_DB_PASSWORD`; el DAO la convierte en `DaoException`. |
 
 ---
 
 ## 13. Cómo extender el proyecto
 
-### Agregar los DAO de Oracle
-
-1. Crea el paquete `persistence.oracle` con `OracleCustomerDao implements CustomerDao` (y lo mismo para `OrderDao`).
-2. Usa `ConnectionFactory.getConnection()`, `PreparedStatement` y convierte la `SQLException` en `DaoException`.
-3. En `DaoFactory.clientes()`, cambia el `throw` por `return new OracleCustomerDao();`.
-4. **No hay que tocar ninguna pantalla.**
-
 ### Agregar un platillo
 
-1. Agrega el renglón en la tabla `DISHES` (el `id` que le toque).
+1. Agrega el renglón en la tabla `PLATILLO` (el `id` lo pone la secuencia).
 2. Crea `class NuevoPlatillo extends Dishes` con `super(nombre, precio, descripcion, id, "/DishesP/DishN.png")`.
 3. Agrégalo en `Main_Frame.platillosDe(clave)`. Cuando exista `DishDao`, estos dos pasos desaparecen.
 
@@ -801,20 +812,16 @@ sequenceDiagram
 2. Usa `Tarjeta`, `Buttons.*`, `Theme.etiqueta` y `Grilla` para mantener el estilo.
 3. Navega con `Main_Frame.changeDynamicPanel(new MiPantalla())`. Si debe marcar una pestaña, agrégala en `Main_Frame.marcarSeccion`.
 
-### Guardar las reseñas en Couchbase (c04)
-
-En `Details.mostrarResena`, reemplaza el `Map` y `RESENAS.put(...)` por una llamada a `Restaurant`. Por ejemplo, `calificar(order, resena)`, que delegue en un `ResenaDao`. Atrapa la `DaoException` y regresa `false`: así `ResenaPanel` se queda en modo formulario y el cliente no pierde lo que escribió.
-
 ---
 
 ## 14. Mejoras conocidas
 
 | Tema | Detalle | Tarea |
 |---|---|---|
-| Contraseñas en texto plano | `COSTUMERS.PASSWORD` y `login` comparan el texto tal cual. | s01 (PBKDF2) |
+| Contraseñas en texto plano | `CLIENTE.CONTRASEÑA` y `login` comparan el texto tal cual. | s01 (PBKDF2) |
 | Carrito al cerrar sesión | `Carrito` es `static` y `cerrarSesion()` no lo vacía: si otro usuario inicia sesión en la misma ejecución, ve el carrito anterior. | Por asignar |
 | Estado `static` en pantallas | `Main_Frame`, `ProfileScreen`, `Personalinfo` y `Payment` usan campos `static` para comunicarse entre pantallas. Funciona porque solo hay una ventana a la vez. | t25 |
 | Catálogo en código | Platillos y franquicias son clases; deberían leerse de la base de datos. | t22 / o03 |
 | Código sin uso | `PromoCard_GIF` (lo reemplazó el GIF de `Details`) y la dependencia `jgoodies-forms` del `pom.xml`. | t25 |
 | Nombres heredados | Paquete `Dishes` con mayúscula, `Buñuelos.java` con ñ, `Costumer` y `setAddress1`. | t25 |
-| `PruebaConexion` solo para Oracle | Usa `DUAL`, que SQLite no tiene. | — |
+| Total calculado con el precio actual | `PEDIDO` no guarda el total ni el precio unitario: si cambia el precio de un platillo, cambian los totales de pedidos viejos. | Esquema |

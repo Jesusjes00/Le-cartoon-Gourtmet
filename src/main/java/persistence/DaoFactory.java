@@ -1,26 +1,21 @@
 package persistence;
 
-import persistence.sqlite.SqliteCustomerDao;
-import persistence.sqlite.SqliteOrderDao;
 import persistence.oracle.OracleCustomerDao;
 import persistence.oracle.OracleOrderDao;
 
-
- //lugar que decide qué implementación de DAO usa la app.
-
+/**
+ * Factory: el único lugar que decide qué implementación de DAO usa la app.
+ * LeCartoon trabaja solo con Oracle; Restaurant y las pantallas solo conocen las interfaces.
+ */
 public final class DaoFactory {
 
     private DaoFactory() { }   // solo métodos estáticos
 
-    public static boolean esOracle() {
-        return ConnectionFactory.describir().startsWith("jdbc:oracle:");
-    }
-
     public static CustomerDao clientes() {
-        return esOracle() ? new OracleCustomerDao() : new SqliteCustomerDao();
+        return new OracleCustomerDao();
     }
 
     public static OrderDao pedidos() {
-        return esOracle() ? new OracleOrderDao() : new SqliteOrderDao();
+        return new OracleOrderDao();
     }
 }

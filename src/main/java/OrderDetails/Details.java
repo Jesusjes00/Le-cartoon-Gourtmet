@@ -58,10 +58,6 @@ public class Details extends JPanel {
 	private int anchoGif;                    // el GIF es el protagonista: crece con la pantalla
 	private JPanel huecoResena;              // debajo de la tarjeta de estado; se llena al estar Entregado
 
-	// PROVISIONAL hasta c04: las reseñas viven en memoria mientras exista la app.
-	// En c04 esto se cambia por Restaurant.getInstance().resenaDe(id) / calificar(...) contra Couchbase.
-	private static final java.util.Map<Integer, Resena> RESENAS = new java.util.HashMap<>();
-
 	public Details(ArrayList<OrderDetails> orderlist, Order order) {
 		this.orderlist = orderlist;
 		this.order = order;
@@ -270,10 +266,22 @@ public class Details extends JPanel {
 	/** Solo un pedido entregado se puede calificar. La tarjeta aparece debajo del estado. */
 	private void mostrarResena(boolean entregado) {
 		if (!entregado || huecoResena.getComponentCount() > 0) return;
-		ResenaPanel panel = new ResenaPanel(RESENAS.get(order.getId()), r -> {
-			RESENAS.put(order.getId(), r);       // c04: aquí va la llamada que guarda en Couchbase (try/catch DaoException → false)
-			Toast.exito(Details.this, "¡Gracias! Tu reseña de " + r.getEstrellas() + (r.getEstrellas() == 1 ? " estrella" : " estrellas") + " se envió");
-			return true;
+		Resena guardada = null;
+		try {
+			guardada = Restaurant.getInstance().resenaDe(order.getId());   // la reseña vive en PEDIDO (Oracle)
+		} catch (DaoException ex) {
+			System.err.println("[DAO] " + ex.getMessage() + " -> " + ex.getCause());
+		}
+		ResenaPanel panel = new ResenaPanel(guardada, r -> {
+			try {
+				Restaurant.getInstance().calificar(order.getId(), r);
+				Toast.exito(Details.this, "¡Gracias! Tu reseña de " + r.getEstrellas() + (r.getEstrellas() == 1 ? " estrella" : " estrellas") + " se envió");
+				return true;                     // la tarjeta pasa a modo lectura
+			} catch (DaoException ex) {
+				System.err.println("[DAO] " + ex.getMessage() + " -> " + ex.getCause());
+				JOptionPane.showMessageDialog(null, "No se pudo guardar tu reseña. Intenta de nuevo.");
+				return false;                    // la tarjeta sigue editable
+			}
 		});
 		huecoResena.setBorder(BorderFactory.createEmptyBorder(24, 0, 0, 0));
 		huecoResena.add(panel, BorderLayout.CENTER);
