@@ -4,11 +4,11 @@ import java.time.LocalDateTime;
 
 /**
  * Reseña de un pedido entregado: calificación entera de 1 a 5 + comentario opcional.
- * Es lo que se guarda en Couchbase dentro del documento del pedido (campo "resena").
+ * Se guarda en Oracle, en las columnas PEDIDO.CALIFICACION y PEDIDO.RESENA.
  */
 public class Resena {
 
-	public static final int MAX_COMENTARIO = 500;
+	public static final int MAX_COMENTARIO = 300;   // PEDIDO.RESENA es VARCHAR2(300 CHAR)
 
 	private final int estrellas;            // 1..5
 	private final String comentario;        // puede venir vacío, nunca null

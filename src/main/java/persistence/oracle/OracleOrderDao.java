@@ -4,6 +4,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -11,6 +13,7 @@ import Restaurante_Completo.LeCartoon_Original.Carrito;
 import Restaurante_Completo.LeCartoon_Original.Carrito.ItemPedido;
 import Restaurante_Completo.LeCartoon_Original.Order;
 import Restaurante_Completo.LeCartoon_Original.OrderDetails;
+import Restaurante_Completo.LeCartoon_Original.Resena;
 import persistence.ConnectionFactory;
 import persistence.DaoException;
 import persistence.OrderDao;
@@ -128,6 +131,47 @@ public class OracleOrderDao implements OrderDao {
             }
         }
         throw new SQLException("Oracle no regresó el id del pedido");
+    }
+
+    @Override
+    public Resena resenaDe(int idPedido) {
+        String sql = "SELECT calificacion, resena, fecha_actualizacion FROM pedido WHERE id_pedido = ?";
+        try (Connection con = ConnectionFactory.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setInt(1, idPedido);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;                     // no existe el pedido
+                int estrellas = rs.getInt("calificacion");
+                if (rs.wasNull()) return null;                   // existe, pero aún no lo califican
+                Timestamp fecha = rs.getTimestamp("fecha_actualizacion");
+                return new Resena(estrellas, rs.getString("resena"),
+                                  fecha == null ? null : fecha.toLocalDateTime());
+            }
+        } catch (SQLException e) {
+            throw new DaoException("No se pudo leer la reseña del pedido " + idPedido, e);
+        }
+    }
+
+    @Override
+    public void calificar(int idPedido, Resena resena) {
+        // Solo pedidos ENTREGADOS (id_status = 3) y solo una vez (calificacion IS NULL).
+        String sql = "UPDATE pedido SET calificacion = ?, resena = ?, fecha_actualizacion = SYSDATE "
+                   + "WHERE id_pedido = ? AND id_status = 3 AND calificacion IS NULL";
+        try (Connection con = ConnectionFactory.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setInt(1, resena.getEstrellas());
+            if (resena.getComentario().isEmpty()) {
+                ps.setNull(2, Types.VARCHAR);                    // sin comentario = NULL
+            } else {
+                ps.setString(2, resena.getComentario());
+            }
+            ps.setInt(3, idPedido);
+            if (ps.executeUpdate() == 0) {
+                throw new DaoException("El pedido " + idPedido + " no existe, no está entregado o ya tiene reseña", null);
+            }
+        } catch (SQLException e) {
+            throw new DaoException("No se pudo guardar la reseña del pedido " + idPedido, e);
+        }
     }
 
     private void insertarDetalles(Connection con, int idPedido, List<ItemPedido> items) throws SQLException {

@@ -5,7 +5,6 @@ import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.Properties;
 
 public final class ConnectionFactory {
@@ -28,8 +27,8 @@ public final class ConnectionFactory {
         URL      = leer(props, "db.url");
         USER     = leer(props, "db.user");
         PASSWORD = leer(props, "db.password");
-        if (URL.isEmpty()) {
-            throw new IllegalStateException("db.url está vacío en db.properties");
+        if (!URL.startsWith("jdbc:oracle:")) {
+            throw new IllegalStateException("LeCartoon solo trabaja con Oracle: db.url debe empezar con jdbc:oracle: (llegó \"" + URL + "\")");
         }
     }
 
@@ -48,16 +47,10 @@ public final class ConnectionFactory {
 
 
     public static Connection getConnection() throws SQLException {
-        Connection c = USER.isEmpty()
-                ? DriverManager.getConnection(URL)
-                : DriverManager.getConnection(URL, USER, PASSWORD);
-
-        if (URL.startsWith("jdbc:sqlite:")) {          // solo SQLite lo necesita
-            try (Statement s = c.createStatement()) {
-                s.execute("PRAGMA foreign_keys = ON");
-            }
+        if (USER.isEmpty()) {
+            throw new SQLException("Faltan las credenciales de Oracle: define LECARTOON_DB_USER y LECARTOON_DB_PASSWORD");
         }
-        return c;
+        return DriverManager.getConnection(URL, USER, PASSWORD);
     }
 
  

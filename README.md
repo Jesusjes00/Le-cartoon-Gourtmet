@@ -8,7 +8,6 @@ Aplicación de escritorio en Java para pedir platillos de *Hora de Aventura*, *U
 ![Java](https://img.shields.io/badge/Java-21-1B1B1B?logo=openjdk&logoColor=white)
 ![Swing](https://img.shields.io/badge/Swing-FlatLaf_3.7-C65D3B)
 ![Oracle](https://img.shields.io/badge/Oracle-19c-1B1B1B?logo=oracle&logoColor=white)
-![SQLite](https://img.shields.io/badge/SQLite-respaldo-C65D3B?logo=sqlite&logoColor=white)
 ![Couchbase](https://img.shields.io/badge/Couchbase-en_integraci%C3%B3n-1B1B1B?logo=couchbase&logoColor=white)
 ![Maven](https://img.shields.io/badge/Maven-build-C65D3B?logo=apachemaven&logoColor=white)
 
@@ -44,9 +43,9 @@ Le Cartoon Gourmet nació en **4.º semestre** como proyecto de Programación Or
 
 Este semestre se retomó como **proyecto final de *Diseño y Programación de Bases de Datos*** (Ingeniería en Cibernética, Universidad La Salle México). El objetivo es llevar la app a una arquitectura con:
 
-- **Base de datos relacional en Oracle 19c** (servidor de la LCI), con SQLite como respaldo para la demo.
-- **Base de datos NoSQL en Couchbase** para el documento del pedido y las reseñas.
-- **Una página web para empleados** que consulta las reseñas guardadas en Couchbase.
+- **Base de datos relacional en Oracle 19c** (servidor Prometeo de la LCI): clientes, pedidos y reseñas.
+- **Base de datos NoSQL en Couchbase** para el documento del pedido.
+- **Una página web para empleados** que consulta las reseñas.
 - Todo el acceso a datos aislado detrás de **interfaces DAO**, para que cambiar de motor no obligue a tocar las pantallas.
 
 > Rama de trabajo: **`data`**.
@@ -94,7 +93,7 @@ Este semestre se retomó como **proyecto final de *Diseño y Programación de Ba
 **Seguimiento y reseñas**
 - *Stepper* con las tres etapas del pedido: **Preparando → Enviado → Entregado**.
 - Color, GIF animado y mensaje distintos en cada etapa (patrón **State**).
-- En un pedido **entregado**, el cliente lo califica con **1 a 5 estrellas** y un comentario opcional de hasta 500 caracteres.
+- En un pedido **entregado**, el cliente lo califica con **1 a 5 estrellas** y un comentario opcional de hasta 300 caracteres. La reseña se guarda en Oracle (`PEDIDO.CALIFICACION` y `PEDIDO.RESENA`).
 
 ---
 
@@ -104,20 +103,18 @@ Este semestre se retomó como **proyecto final de *Diseño y Programación de Ba
 flowchart TD
     UI["Pantallas Swing + FlatLaf<br/>(Login, Inicio, Cocina, Carrito, Perfil, Seguimiento)"]
     R["Restaurant<br/>Singleton + Facade<br/>sesión y reglas de negocio"]
-    F["DaoFactory<br/>elige el motor según db.url"]
+    F["DaoFactory<br/>crea los DAO de Oracle"]
     CD["CustomerDao"]
     OD["OrderDao"]
-    SQ["SqliteCustomerDao<br/>SqliteOrderDao"]
-    OR["Oracle DAOs<br/>(en integración)"]
+    OR["OracleCustomerDao<br/>OracleOrderDao"]
     CF["ConnectionFactory<br/>una conexión por operación"]
     CB[("Couchbase<br/>documento del pedido + reseña")]
     WEB["Web de empleados<br/>(consulta reseñas)"]
 
     UI --> R --> F
     F --> CD & OD
-    CD --> SQ & OR
-    OD --> SQ & OR
-    SQ --> CF
+    CD --> OR
+    OD --> OR
     OR --> CF
     R -. c02–c04 .-> CB
     WEB -. lectura .-> CB
@@ -140,7 +137,7 @@ flowchart TD
 |---|---|---|
 | **Singleton** | `Restaurant.getInstance()` | Una sola sesión y un solo punto de acceso a las reglas de negocio. |
 | **Facade** | `Restaurant` | Las pantallas llaman a `login`, `registrarPedido`, `cambiarEstado`… sin conocer los DAO. |
-| **DAO** | `CustomerDao`, `OrderDao` y sus implementaciones | Aísla el SQL. Cambiar de SQLite a Oracle no toca la interfaz. |
+| **DAO** | `CustomerDao`, `OrderDao` y sus implementaciones | Aísla el SQL. La migración de SQLite a Oracle no tocó ni las pantallas ni `Restaurant`. |
 | **Factory** | `DaoFactory`; fábricas de `Buttons` (`primario`, `acento`, `peligro`, `nav`…) | Decide qué implementación o qué estilo crear en un solo lugar. |
 | **State** | `Order` + `Preparing` → `Sent` → `Delivered` | Cada estado define su color, GIF, mensaje y cuál es el siguiente. |
 
@@ -152,19 +149,20 @@ En Couchbase, el documento del pedido usa los patrones **Embedding** (platillos 
 
 ### Relacional
 
-La app funciona hoy sobre **SQLite** (`Restaurant.db`, incluida en el repo para la demo). El esquema definitivo en **Oracle 19c** lo diseña el equipo, con llaves alternas, vistas y *triggers* de autoincremento e histórico.
+La app trabaja **solo con Oracle 19c** (servidor Prometeo de la LCI). El esquema tiene 25 tablas normalizadas (más sus 25 tablas `_H` de histórico), con secuencias y *triggers* de autoincremento, validación y auditoría.
 
-Tablas del modelo actual en SQLite:
+Tablas que usa la app:
 
-| Tabla | Columnas |
+| Operación | Tablas |
 |---|---|
-| `COSTUMERS` | `ID`, `NAME`, `LASTNAME`, `PHONE`, `EMAIL`, `PASSWORD`, `ADDRESS` |
-| `FRANCHISE` | `ID`, `NAME` |
-| `DISHES` | `ID`, `NAME`, `PRICE` |
-| `ORDERS` | `ID`, `COSTUMER`, `PRICE`, `STATE` (1 = Preparando, 2 = Enviado, 3 = Entregado) |
-| `ORDERSDETAILS` | `IDORDER`, `DISH`, `QUANTITY` |
+| Login, registro y perfil | `CLIENTE`, `PERSONA`, `TELEFONO` |
+| Pedido y su historial | `PEDIDO`, `DETALLES_PEDIDO`, `PLATILLO`, `SUCURSAL_CLIENTE`, `REPARTIDOR` |
+| Reseña | `PEDIDO.CALIFICACION` (1 a 5) y `PEDIDO.RESENA` |
 
-> ⚠️ `Restaurant.db` cambia cada vez que se usa la app. Antes de cada commit, con la app cerrada: `git restore Restaurant.db`.
+- Los ids los pone Oracle (secuencia + *trigger*); Java los recupera con `prepareStatement(sql, new String[] { "ID_…" })`.
+- El total del pedido no se guarda: se calcula como `SUM(cantidad × precio) + envío`.
+- `PEDIDO.ID_REPARTIDOR` e `ID_DIRECCION` aceptan `NULL`: el repartidor se asigna al pasar a **Enviado**.
+- Cada cambio queda en `PEDIDO_H`, `CLIENTE_H`, `PERSONA_H`… gracias a los *triggers* de histórico.
 
 ### NoSQL (Couchbase), en integración
 
@@ -208,14 +206,14 @@ src/main/java
 ├── OrderDetails/                ← seguimiento: Details, Stepper, Estrellas, ResenaPanel
 ├── ProfileScreens/              ← perfil, pago, direcciones, historial, editar perfil
 ├── Dishes/  Franchises/         ← catálogo (platillos y franquicias)
-├── persistence/                 ← ConnectionFactory, DaoFactory, interfaces DAO, PruebaConexion
-│   └── sqlite/                  ← SqliteCustomerDao, SqliteOrderDao
+├── persistence/                 ← ConnectionFactory, DaoFactory, interfaces DAO, PruebaConexion, PruebaClientes
+│   └── oracle/                  ← OracleCustomerDao, OracleOrderDao
 └── ui/
     ├── Toast.java               ← avisos flotantes
     └── theme/                   ← Theme, Tarjeta, Lienzo, Grilla, Imagen
 
 src/main/resources
-├── db.properties                ← conexión por defecto (SQLite)
+├── db.properties                ← URL de Oracle (sin usuario ni contraseña)
 ├── Backgrounds/  DishesP/       ← portadas, logos y fotos de platillos
 └── Restaurante_Completo/LeCartoon_Original/  ← FONTS, GIF, IMAGES
 ```
@@ -230,7 +228,7 @@ src/main/resources
 | Maven | 3.9+ (o el que trae Eclipse) |
 | IDE | Eclipse IDE for Java Developers (recomendado) |
 
-Dependencias principales (las descarga Maven): FlatLaf 3.7.2, fuentes Inter y JetBrains Mono para FlatLaf, `sqlite-jdbc` 3.53, `ojdbc11` 23.5 y JUnit 5.
+Dependencias principales (las descarga Maven): FlatLaf 3.7.2, fuentes Inter y JetBrains Mono para FlatLaf, `ojdbc11` 23.5 y JUnit 5.
 
 **Eclipse**
 
@@ -261,11 +259,11 @@ La primera vez, crea tu cuenta desde **"Crear una cuenta"** en la pantalla de in
 
 | Propiedad | Variable de entorno | Por defecto |
 |---|---|---|
-| `db.url` | `LECARTOON_DB_URL` | `jdbc:sqlite:Restaurant.db` |
+| `db.url` | `LECARTOON_DB_URL` | `jdbc:oracle:thin:@//200.13.89.10:1521/pdbcib.lci.ulsa.mx` |
 | `db.user` | `LECARTOON_DB_USER` | *(vacío)* |
 | `db.password` | `LECARTOON_DB_PASSWORD` | *(vacío)* |
 
-`DaoFactory` elige el motor según la URL: `jdbc:oracle:…` → Oracle; cualquier otra → SQLite.
+La URL debe ser de Oracle (`jdbc:oracle:…`); si no, la app no arranca. Sin usuario, cada operación falla con un mensaje que pide definir las variables.
 
 **Credenciales de Oracle (Windows, una vez por equipo):**
 
@@ -275,10 +273,9 @@ setx LECARTOON_DB_PASSWORD "tu_contraseña"
 # Reinicia Eclipse para que las tome.
 ```
 
-La URL de Oracle va en la pestaña *Environment* de la Run Configuration. Para probar solo la conexión, ejecuta `persistence.PruebaConexion`, que imprime el usuario, la hora del servidor y la versión.
+La URL ya viene en `db.properties`: solo hay que definir usuario y contraseña (con `setx` o en la pestaña *Environment* de la Run Configuration). Para probar solo la conexión, ejecuta `persistence.PruebaConexion`, que imprime el usuario, la hora del servidor y la versión.
 
 > 🔒 Nunca subas usuarios ni contraseñas al repositorio: usa variables de entorno.
-> Plan B para la demo: quitar `LECARTOON_DB_URL` o usar `-Ddb.url=jdbc:sqlite:Restaurant.db`.
 
 ---
 
@@ -316,16 +313,16 @@ Estilo **neo-brutalista**: bordes gruesos, sombras duras sin desenfoque, esquina
 - [x] Carrito con controles, estado vacío e IVA desglosado
 - [x] Rediseño completo de la interfaz: header, inicio, cocina, platillo, carrito, perfil, seguimiento con *stepper*, login y registro
 - [x] Interfaz de reseñas (1 a 5 estrellas y comentario)
+- [x] Esquema en Oracle 19c con `OracleCustomerDao` y `OracleOrderDao`; SQLite eliminado
+- [x] Reseñas guardadas en Oracle (`PEDIDO.CALIFICACION` y `PEDIDO.RESENA`)
 
 **En curso**
-- [ ] Esquema y datos semilla en Oracle; `OracleDishDao`, `OracleCustomerDao` y `OracleOrderDao`
-- [ ] Catálogo leído desde la base de datos (`DishDao`)
+- [ ] Catálogo leído desde la base de datos (`DishDao` / `OracleDishDao`)
 - [ ] Conexión a Couchbase; documento del pedido al confirmar; actualización al cambiar de estado
-- [ ] Reseñas guardadas en Couchbase (hoy se guardan en memoria mientras la app está abierta)
 - [ ] Página web de empleados para consultar reseñas
 - [ ] Contraseñas con *hash* (PBKDF2)
 - [ ] Reporte de ventas con vistas
-- [ ] Prueba final con los dos motores y diagrama de clases
+- [ ] Prueba final y diagrama de clases
 
 ---
 

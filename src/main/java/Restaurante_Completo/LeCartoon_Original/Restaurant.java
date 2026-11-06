@@ -76,6 +76,19 @@ public final class Restaurant {
         return pedidos.registrar(cliente.getId(), total, items);
     }
 
+    // ---------- Reseñas ----------
+
+    /** Reseña guardada del pedido, o null si todavía no lo califican. */
+    public Resena resenaDe(int idPedido) {
+        return pedidos.resenaDe(idPedido);
+    }
+
+    /** Guarda la reseña de un pedido entregado del cliente en sesión. */
+    public void calificar(int idPedido, Resena resena) {
+        exigirSesion();
+        pedidos.calificar(idPedido, resena);
+    }
+
     private void exigirSesion() {
         if (cliente == null) {
             throw new IllegalStateException("No hay un cliente con sesión iniciada");
