@@ -58,6 +58,12 @@
     <version>23.5.0.24.07</version>         
 </dependency>
 
+<dependency>
+  <groupId>com.couchbase.client</groupId>
+  <artifactId>java-client</artifactId>
+  <version>3.9.2</version>
+</dependency>
+
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-api</artifactId>
