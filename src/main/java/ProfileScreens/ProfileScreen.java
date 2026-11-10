@@ -21,6 +21,7 @@ import javax.swing.SwingUtilities;
 import Restaurante_Completo.LeCartoon_Original.Buttons;
 import Restaurante_Completo.LeCartoon_Original.Costumer;
 import Restaurante_Completo.LeCartoon_Original.Login_Window;
+import Restaurante_Completo.LeCartoon_Original.Main_Frame;
 import Restaurante_Completo.LeCartoon_Original.Order;
 import Restaurante_Completo.LeCartoon_Original.Restaurant;
 import persistence.DaoException;
@@ -163,6 +164,7 @@ public class ProfileScreen extends JPanel {
 		Buttons logOut = Buttons.peligro("Cerrar sesión");
 		logOut.setPreferredSize(new Dimension(10, 44 + Theme.SOMBRA));
 		logOut.addActionListener(e -> {
+			Main_Frame.detenerVigilante();          // deja de revisar pedidos de este cliente
 			Restaurant.getInstance().cerrarSesion();
 			Login_Window log_window = new Login_Window();
 			log_window.showloginframe(true);

@@ -22,6 +22,7 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTextArea;
 import javax.swing.SwingConstants;
+import javax.swing.Timer;
 
 import Restaurante_Completo.LeCartoon_Original.Buttons;
 import Restaurante_Completo.LeCartoon_Original.Delivered;
@@ -31,6 +32,7 @@ import Restaurante_Completo.LeCartoon_Original.OrderDetails;
 import Restaurante_Completo.LeCartoon_Original.Resena;
 import Restaurante_Completo.LeCartoon_Original.Restaurant;
 import persistence.DaoException;
+import ui.PanelSwipe;
 import ui.Toast;
 import ui.theme.Lienzo;
 import ui.theme.Tarjeta;
@@ -39,6 +41,9 @@ import ui.theme.Theme;
 /**
  * Seguimiento de un pedido: stepper con las 3 etapas, tarjeta del estado (color, GIF, hora
  * estimada y mensaje, todo viene del patrón State) y la lista de platillos.
+ * El cliente ya no avanza su pedido: lo avanza el vendedor desde su página. Cuando la app
+ * detecta el cambio (al abrir el pedido o con el vigilante de Main_Frame), la tarjeta se
+ * desliza al estado nuevo con avanzarA().
  */
 public class Details extends JPanel {
 	private ArrayList<OrderDetails> orderlist;
@@ -54,14 +59,28 @@ public class Details extends JPanel {
 	private JLabel estimacion;
 	private JLabel hora;
 	private JTextArea textState;
-	private Buttons simState;
+	private PanelSwipe swipe;                // envuelve la tarjeta de estado para animar el cambio
+	private int destino;                     // estado al que hay que llegar (el que tiene la BD)
+	private boolean animando;
 	private int anchoGif;                    // el GIF es el protagonista: crece con la pantalla
 	private JPanel huecoResena;              // debajo de la tarjeta de estado; se llena al estar Entregado
 
 	public Details(ArrayList<OrderDetails> orderlist, Order order) {
 		this.orderlist = orderlist;
-		this.order = order;
+		int real = order.getId_state();
+		int visto = estadoVisto(order);
+		// Si avanzó mientras el cliente no lo veía, la pantalla arranca donde lo dejó...
+		this.order = visto < real
+				? new Order(order.getId(), order.getId_costumer(), order.getTotalPrice(), visto)
+				: order;
+		this.destino = this.order.getId_state();
 		initialize();
+		// ...y un momento después se desliza hasta el estado real
+		if (visto < real) {
+			Timer espera = new Timer(700, e -> avanzarA(real));
+			espera.setRepeats(false);
+			espera.start();
+		}
 	}
 
 	public void initialize() {
@@ -116,7 +135,8 @@ public class Details extends JPanel {
 		JPanel izquierda = new JPanel();
 		izquierda.setOpaque(false);
 		izquierda.setLayout(new BoxLayout(izquierda, BoxLayout.Y_AXIS));
-		JComponent estado = crearTarjetaEstado();
+		swipe = new PanelSwipe(crearTarjetaEstado());
+		JComponent estado = swipe;
 		huecoResena = new JPanel(new BorderLayout());
 		huecoResena.setOpaque(false);
 		estado.setAlignmentX(LEFT_ALIGNMENT);
@@ -139,7 +159,7 @@ public class Details extends JPanel {
 		updateGraphics(order);
 	}
 
-	/** Tarjeta del color del estado: GIF a la izquierda; hora, mensaje y botón a la derecha. */
+	/** Tarjeta del color del estado: GIF a la izquierda; hora y mensaje a la derecha. */
 	private JComponent crearTarjetaEstado() {
 		tarjetaEstado = new Tarjeta(new GridBagLayout());
 		GridBagConstraints c = new GridBagConstraints();
@@ -171,40 +191,11 @@ public class Details extends JPanel {
 		textState.setFont(Theme.titulo(22));
 		textState.setColumns(16);
 
-		simState = Buttons.secundario("Avanzar estado →");
-		simState.setPreferredSize(new Dimension(220, 44 + Theme.SOMBRA));
-		simState.setToolTipText("Simula que el restaurante avanza el pedido");
-		simState.addActionListener(e -> {
-			int anterior = order.getId_state();
-			if (anterior + 1 <= 3) {
-			    order.setId_state(anterior + 1);
-			    try {
-			        Restaurant.getInstance().cambiarEstado(order);
-			        order.changeState();          // el patrón State avanza solo si se guardó
-			        updateGraphics(order);
-			        Toast.exito(Details.this, "Pedido actualizado: " + order.actualState());
-			    } catch (DaoException ex) {
-			        order.setId_state(anterior);  // se regresa: la BD no cambió
-			        System.err.println("[DAO] " + ex.getMessage() + " -> " + ex.getCause());
-			        JOptionPane.showMessageDialog(null, "No se pudo guardar el nuevo estado del pedido");
-			    }
-			} else {
-			    Toast.aviso(Details.this, "Este pedido ya fue entregado");
-			}
-		});
-
 		for (JComponent comp : new JComponent[] { estimacion, hora, textState }) comp.setAlignmentX(LEFT_ALIGNMENT);
-		JPanel filaBoton = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-		filaBoton.setOpaque(false);
-		filaBoton.setAlignmentX(LEFT_ALIGNMENT);
-		filaBoton.add(simState);
-
 		textos.add(estimacion);
 		textos.add(hora);
 		textos.add(Box.createVerticalStrut(12));
 		textos.add(textState);
-		textos.add(Box.createVerticalStrut(20));
-		textos.add(filaBoton);
 
 		c.gridx = 1;
 		c.weightx = 1;
@@ -289,6 +280,10 @@ public class Details extends JPanel {
 
 	/** Repinta todo con el color, GIF y mensaje del estado actual (los da el patrón State). */
 	public void updateGraphics(Order order) {
+		pintarEstado(order, false);
+	}
+
+	private void pintarEstado(Order order, boolean animarStepper) {
 		Color fondo = order.getColor();
 		Color texto = Theme.textoSobre(fondo);
 
@@ -304,15 +299,57 @@ public class Details extends JPanel {
 
 		boolean entregado = order.getState() instanceof Delivered;
 		estimacion.setText(entregado ? "PEDIDO ENTREGADO" : "HORA ESTIMADA DE ENTREGA");
-		simState.setVisible(!entregado);          // ya no hay siguiente estado
 		mostrarResena(entregado);
 
 		badgeEstado.setText(order.actualState().toUpperCase());
 		badgeEstado.setBackground(fondo);
 		badgeEstado.setForeground(texto);
-		stepper.setEstado(order.getId_state(), fondo);
+		if (animarStepper) stepper.animarA(order.getId_state(), fondo, PanelSwipe.DURACION_MS);
+		else stepper.setEstado(order.getId_state(), fondo);
 
 		revalidate();
 		repaint();
+	}
+
+	// ── Detección del cambio de estado ──
+
+	/**
+	 * Lleva la pantalla, paso por paso y con animación, hasta el estado que ya tiene la BD.
+	 * La llaman el constructor (cambio que pasó mientras el cliente no veía) y el vigilante
+	 * de Main_Frame (cambio en vivo). Si ya va en camino a ese estado, no hace nada.
+	 */
+	public void avanzarA(int nuevoEstado) {
+		if (!animando && nuevoEstado <= order.getId_state()) return;   // ya se muestra (aviso repetido)
+		if (nuevoEstado > destino) destino = Math.min(nuevoEstado, 3);
+		if (!animando) siguientePaso();
+	}
+
+	private void siguientePaso() {
+		if (order.getId_state() >= destino) {               // llegó: se marca como visto
+			animando = false;
+			try {
+				Restaurant.getInstance().marcarVisto(order.getId(), order.getId_state());
+			} catch (IllegalStateException sinSesion) {
+				return;
+			}
+			Toast.exito(this, "Pedido #" + order.getId() + ": " + order.actualState());
+			Main_Frame.revisarPedidos();                    // actualiza "Mis pedidos (n)"
+			return;
+		}
+		animando = true;
+		swipe.animar(() -> {
+			order.setId_state(order.getId_state() + 1);
+			order.changeState();                            // patrón State: Preparing → Sent → Delivered
+			pintarEstado(order, true);
+		}, this::siguientePaso);
+	}
+
+	/** Último estado que el cliente vio de este pedido (si no hay sesión, el actual). */
+	private static int estadoVisto(Order o) {
+		try {
+			return Restaurant.getInstance().estadoVisto(o);
+		} catch (IllegalStateException sinSesion) {
+			return o.getId_state();
+		}
 	}
 }

@@ -11,6 +11,10 @@ import java.awt.Rectangle;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -20,12 +24,14 @@ import javax.swing.JLabel;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
+import javax.swing.SwingWorker;
 
 import Dishes.*;
 import Franchises.*;
 import OrderDetails.Details;
 import ProfileScreens.OrderHistory;
 import ProfileScreens.ProfileScreen;
+import ui.Toast;
 import ui.theme.Theme;
 
 /**
@@ -76,6 +82,7 @@ public class Main_Frame {
 		contentPane.add(contentPaneDinamic, BorderLayout.CENTER);
 
 		changeDynamicPanel(new MainFramePanel());
+		iniciarVigilante();
 	}
 
 	// ══════════════ Header ══════════════
@@ -347,6 +354,95 @@ public class Main_Frame {
 		for (Buttons b : new Buttons[] { btnInicio, btnCocinas, btnPedidos, btnPerfil }) {
 			b.setSeleccionado(b == activa);
 		}
+	}
+
+	// ══════════════ Vigilante de pedidos ══════════════
+	// El vendedor avanza los pedidos desde su página (Oracle + Couchbase). Cada CADA_MS se
+	// pregunta a Oracle, en otro hilo, si algún pedido del cliente avanzó desde la última vez
+	// que lo vio. Si está abierto, se anima en vivo; si no, Toast + "Mis pedidos (n)".
+
+	private static final int CADA_MS = 10_000;
+	private static javax.swing.Timer vigilante;
+	private static boolean revisando;                          // evita dos consultas encimadas
+	private static final Set<String> avisados = new HashSet<>(); // "idPedido:estado" ya avisados
+
+	/** Arranca el vigilante (revisa de inmediato y luego cada 10 s). */
+	public static void iniciarVigilante() {
+		detenerVigilante();
+		revisarPedidos();
+		vigilante = new javax.swing.Timer(CADA_MS, e -> revisarPedidos());
+		vigilante.start();
+	}
+
+	/** Lo detiene (al cerrar sesión) y limpia los avisos. */
+	public static void detenerVigilante() {
+		if (vigilante != null) vigilante.stop();
+		vigilante = null;
+		avisados.clear();
+		ponerNovedades(0);
+	}
+
+	/**
+	 * Consulta Oracle con un SwingWorker: doInBackground() corre en otro hilo (la ventana no se
+	 * congela mientras responde Prometeo) y done() regresa al hilo de la interfaz para pintar.
+	 */
+	public static void revisarPedidos() {
+		if (revisando || Restaurant.getInstance().getCliente() == null) return;
+		revisando = true;
+		new SwingWorker<List<Order>, Void>() {
+			@Override
+			protected List<Order> doInBackground() {
+				return Restaurant.getInstance().pedidosConNovedades();
+			}
+
+			@Override
+			protected void done() {
+				revisando = false;
+				try {
+					aplicarNovedades(get());
+				} catch (InterruptedException | ExecutionException ex) {
+					System.err.println("[Vigilante] No se pudieron revisar los pedidos -> " + ex.getCause());
+				}
+			}
+		}.execute();
+	}
+
+	private static void aplicarNovedades(List<Order> cambiados) {
+		java.awt.Component pantalla = contentPaneDinamic.getComponentCount() > 0 ? contentPaneDinamic.getComponent(0) : null;
+		Details abierto = (pantalla instanceof Details) ? (Details) pantalla : null;
+		int pendientes = 0;
+		Order nuevo = null;                                      // último cambio que no se había avisado
+		int nuevos = 0;
+		for (Order o : cambiados) {
+			if (abierto != null && abierto.getOrder().getId() == o.getId()) {
+				abierto.avanzarA(o.getId_state());              // está en pantalla: se anima y se marca visto
+				continue;
+			}
+			pendientes++;
+			if (avisados.add(o.getId() + ":" + o.getId_state())) {
+				nuevo = o;
+				nuevos++;
+			}
+		}
+		if (nuevos == 1) {
+			Toast.exito(contentPaneDinamic, "Tu pedido #" + nuevo.getId()
+					+ (nuevo.getId_state() == 2 ? " ya va en camino" : " ya fue entregado"));
+		} else if (nuevos > 1) {
+			Toast.exito(contentPaneDinamic, "Tienes " + nuevos + " pedidos con novedades");
+		}
+		ponerNovedades(pendientes);
+	}
+
+	/** "Mis pedidos (n)" en el header; sin número si no hay novedades. */
+	private static void ponerNovedades(int n) {
+		if (btnPedidos == null) return;
+		String texto = n > 0 ? "Mis pedidos (" + n + ")" : "Mis pedidos";
+		if (texto.equals(btnPedidos.getText())) return;
+		btnPedidos.setText(texto);
+		int ancho = btnPedidos.getFontMetrics(btnPedidos.getFont()).stringWidth(texto) + 40;
+		btnPedidos.setPreferredSize(new Dimension(ancho, ALTO_HEADER));
+		btnPedidos.revalidate();
+		btnPedidos.repaint();
 	}
 
 	private static String recortar(String s, int max) {

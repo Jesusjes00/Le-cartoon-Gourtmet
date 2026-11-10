@@ -5,8 +5,10 @@ import java.util.List;
 
 import Restaurante_Completo.LeCartoon_Original.Carrito.ItemPedido;
 import persistence.CustomerDao;
+import persistence.DaoException;
 import persistence.DaoFactory;
 import persistence.OrderDao;
+import persistence.PedidoDocDao;
 
 
 public final class Restaurant {
@@ -15,6 +17,7 @@ public final class Restaurant {
 
     private final CustomerDao clientes = DaoFactory.clientes();
     private final OrderDao pedidos = DaoFactory.pedidos();
+    private final PedidoDocDao documentos = DaoFactory.documentos();
 
     private Costumer cliente;          // sesión actual (null = nadie ha entrado)
 
@@ -73,7 +76,15 @@ public final class Restaurant {
         if (items == null || items.isEmpty()) {
             throw new IllegalArgumentException("El carrito está vacío");
         }
-        return pedidos.registrar(cliente.getId(), total, items);
+        int id = pedidos.registrar(cliente.getId(), total, items);      // 1) Oracle: fuente de verdad
+        EstadosVistos.marcar(cliente.getId(), id, 1);                   // el cliente lo vio nacer en "Preparando"
+        try {
+            documentos.crear(id, cliente, pedidos.sucursalDePedido(id), items);  // 2) copia en Couchbase
+        } catch (DaoException e) {
+            System.err.println("[Couchbase] El pedido " + id + " quedó solo en Oracle: "
+                               + e.getMessage() + " -> " + e.getCause());
+        }
+        return id;
     }
 
     // ---------- Reseñas ----------
@@ -83,10 +94,45 @@ public final class Restaurant {
         return pedidos.resenaDe(idPedido);
     }
 
-    /** Guarda la reseña de un pedido entregado del cliente en sesión. */
     public void calificar(int idPedido, Resena resena) {
         exigirSesion();
-        pedidos.calificar(idPedido, resena);
+        pedidos.calificar(idPedido, resena);                             // 1) Oracle
+        try {
+            documentos.calificar(idPedido, resena);                      // 2) Couchbase
+        } catch (DaoException e) {
+            System.err.println("[Couchbase] La reseña del pedido " + idPedido + " quedó solo en Oracle: "
+                               + e.getMessage() + " -> " + e.getCause());
+        }
+    }
+
+    // ---------- Seguimiento: qué estado ya vio el cliente ----------
+
+    /**
+     * Pedidos del cliente que avanzaron desde la última vez que los vio en esta computadora
+     * (los mueve el vendedor). Lo usa el vigilante de Main_Frame, desde otro hilo.
+     */
+    public List<Order> pedidosConNovedades() {
+        Costumer c = cliente;                           // copia local: otro hilo puede cerrar la sesión
+        if (c == null) throw new IllegalStateException("No hay un cliente con sesión iniciada");
+        List<Order> cambiados = new ArrayList<>();
+        for (Order o : pedidos.pedidosDe(c.getId())) {
+            if (o.getId_state() > EstadosVistos.visto(c.getId(), o.getId(), o.getId_state())) {
+                cambiados.add(o);
+            }
+        }
+        return cambiados;
+    }
+
+    /** Último estado que el cliente vio del pedido (si nunca lo vio aquí, el actual). */
+    public int estadoVisto(Order pedido) {
+        exigirSesion();
+        return EstadosVistos.visto(cliente.getId(), pedido.getId(), pedido.getId_state());
+    }
+
+    /** Anota que el cliente ya vio el pedido en ese estado. */
+    public void marcarVisto(int idPedido, int estado) {
+        exigirSesion();
+        EstadosVistos.marcar(cliente.getId(), idPedido, estado);
     }
 
     private void exigirSesion() {

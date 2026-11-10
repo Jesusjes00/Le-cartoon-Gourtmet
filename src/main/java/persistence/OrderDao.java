@@ -20,5 +20,8 @@ public interface OrderDao {
 	Resena resenaDe(int idPedido);
 	// guarda la reseña de un pedido entregado (solo una vez)
 	void calificar(int idPedido, Resena resena);
+	
+	// sucursal asignada al pedido (la usa el documento de Couchbase)
+	int sucursalDePedido(int idPedido);
 
 }
