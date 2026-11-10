@@ -89,6 +89,21 @@ public class OracleOrderDao implements OrderDao {
     }
     
     @Override
+    public int sucursalDePedido(int idPedido) {
+        String sql = "SELECT id_sucursal FROM pedido WHERE id_pedido = ?";
+        try (Connection con = ConnectionFactory.getConnection();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setInt(1, idPedido);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) throw new DaoException("No existe el pedido " + idPedido, null);
+                return rs.getInt(1);
+            }
+        } catch (SQLException e) {
+            throw new DaoException("No se pudo leer la sucursal del pedido " + idPedido, e);
+        }
+    }
+    
+    @Override
     public int registrar(int idCliente, double total, List<ItemPedido> items) {
         // 'total' no se guarda: PEDIDO no tiene columna de total, se recalcula en pedidosDe().
         try (Connection con = ConnectionFactory.getConnection()) {

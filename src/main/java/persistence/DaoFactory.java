@@ -2,6 +2,7 @@ package persistence;
 
 import persistence.oracle.OracleCustomerDao;
 import persistence.oracle.OracleOrderDao;
+import persistence.couchbase.CouchbasePedidoDocDao;
 
 /**
  * Factory: el único lugar que decide qué implementación de DAO usa la app.
@@ -17,5 +18,9 @@ public final class DaoFactory {
 
     public static OrderDao pedidos() {
         return new OracleOrderDao();
+    }
+    
+    public static PedidoDocDao documentos() {
+        return new CouchbasePedidoDocDao();
     }
 }
