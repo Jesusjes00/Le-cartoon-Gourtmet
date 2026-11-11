@@ -135,7 +135,7 @@ public class ProfileScreen extends JPanel {
 
 		infoBtn    = opcion("Información personal", "user.PNG");
 		payBtn     = opcion("Métodos de pago",      "card.png");
-		addressBtn = opcion("Mis direcciones",      "localizacion.png");
+		addressBtn = opcion("Mi dirección",         "localizacion.png");
 		ordersBtn  = opcion("Historial de pedidos", "pedido.png");
 
 		infoBtn.addActionListener(e -> {
@@ -146,7 +146,7 @@ public class ProfileScreen extends JPanel {
 			changePanel(new Payment());
 			Payment.changedCostumer(costumer);
 		});
-		addressBtn.addActionListener(e -> changePanel(new Addresses(costumer.getAddress())));
+		addressBtn.addActionListener(e -> changePanel(new Addresses()));
 		ordersBtn.addActionListener(e -> changePanel(new OrderHistory(orders)));
 
 		JLabel titulo = Theme.etiqueta("CUENTA", Theme.mono(13), Theme.GRAFITO);
@@ -208,7 +208,7 @@ public class ProfileScreen extends JPanel {
 	private void seleccionarPor(JPanel panel) {
 		if (panel instanceof Personalinfo) seleccionar(infoBtn);
 		else if (panel instanceof Payment || panel instanceof AgregarTarjeta) seleccionar(payBtn);
-		else if (panel instanceof Addresses) seleccionar(addressBtn);
+		else if (panel instanceof Addresses || panel instanceof EditarDireccion) seleccionar(addressBtn);
 		else if (panel instanceof OrderHistory) seleccionar(ordersBtn);
 		else seleccionar(null);   // Editar perfil: ninguna
 	}

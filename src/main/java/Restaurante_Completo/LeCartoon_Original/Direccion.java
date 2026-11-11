@@ -1,6 +1,12 @@
 package Restaurante_Completo.LeCartoon_Original;
 
+/**
+ * Dirección de entrega completa: los nombres de toda la cadena del catálogo
+ * (pais → estado → ciudad → municipio → codigo_postal → colonia → calle) más los números de DIRECCION.
+ * La lee OracleDireccionDao con un JOIN de 9 tablas.
+ */
 public class Direccion {
+	private int id;            // DIRECCION.ID_DIRECCION (0 si aún no está en Oracle)
 	private String pais;
 	private String estado;
 	private String ciudad;
@@ -23,6 +29,32 @@ public class Direccion {
 		this.calle = calle;
 		this.numexterior = numexterior;
 		this.numinterior = numinterior;
+	}
+
+	/** Igual que el de arriba, pero con el id que ya tiene en Oracle. */
+	public Direccion(int id, String pais, String estado, String ciudad, String municipio, String cp, String colonia,
+			String calle, String numexterior, String numinterior) {
+		this(pais, estado, ciudad, municipio, cp, colonia, calle, numexterior, numinterior);
+		this.id = id;
+	}
+
+	public int getId() {
+		return id;
+	}
+
+	/** "Insurgentes Sur 300 int. B" (el interior solo si hay). */
+	public String calleYNumero() {
+		String n = calle + " " + numexterior;
+		return vacio(numinterior) ? n : n + " int. " + numinterior;
+	}
+
+	/** Dirección completa en una línea, para el perfil y el carrito. */
+	public String texto() {
+		return calleYNumero() + ", Col. " + colonia + ", C.P. " + cp + ", " + municipio + ", " + ciudad;
+	}
+
+	private static boolean vacio(String s) {
+		return s == null || s.isBlank();
 	}
 
 	public String getPais() {

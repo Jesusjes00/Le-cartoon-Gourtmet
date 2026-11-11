@@ -288,6 +288,12 @@ public class Main_Frame {
 		marcar(btnPedidos);
 	}
 
+	/** Perfil abierto en el formulario de dirección; al guardar regresa al carrito (lo usa "Realizar pedido"). */
+	public static void irADireccionDesdeCarrito() {
+		changeDynamicPanel(new ProfileScreen());
+		ProfileScreen.changePanel(new ProfileScreens.EditarDireccion(true));
+	}
+
 	/** Pone "Carrito (n)" con las unidades actuales. Llamar después de agregar o quitar platillos. */
 	public static void actualizarCarrito() {
 		if (btnCarrito != null) btnCarrito.setText("Carrito (" + Carrito.totalUnidades() + ")");

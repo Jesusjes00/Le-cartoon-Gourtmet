@@ -131,8 +131,7 @@ public class CartPanel extends JPanel {
         agregar(panelResumen, Theme.etiqueta("Precios con IVA incluido", Theme.texto(12), Theme.GRAFITO));
         panelResumen.add(Box.createVerticalStrut(20));
 
-        agregar(panelResumen, crearInfoBox("localizacion.png", "DIRECCIÓN DE ENTREGA",
-                Restaurant.getInstance().getCliente().getAddress()));
+        agregar(panelResumen, crearInfoBox("localizacion.png", "DIRECCIÓN DE ENTREGA", textoDireccion()));
         panelResumen.add(Box.createVerticalStrut(10));
         agregar(panelResumen, crearInfoBox("card.png", "MÉTODO DE PAGO", textoMetodoPago()));
         panelResumen.add(Box.createVerticalStrut(24));
@@ -144,6 +143,12 @@ public class CartPanel extends JPanel {
 			public void actionPerformed(ActionEvent e) {
 				if(!Carrito.estaVacio()) {
 					try {
+						// Regla: sin dirección no hay pedido. Se manda al formulario y al guardar regresa aquí.
+						if (Restaurant.getInstance().miDireccion() == null) {
+							Toast.aviso(CartPanel.this, "Agrega tu dirección de entrega para pedir");
+							Main_Frame.irADireccionDesdeCarrito();
+							return;
+						}
 						int id = Restaurant.getInstance().registrarPedido(Carrito.totalAPagar(), listaPedidos);
 					    Toast.exito(CartPanel.this, "Tu pedido #" + id + " fue realizado");
 					    Carrito.vaciar();
@@ -349,6 +354,17 @@ public class CartPanel extends JPanel {
         fila.add(lbl, BorderLayout.WEST);
         fila.add(val, BorderLayout.EAST);
         return fila;
+    }
+
+    /** Dirección real del cliente (Oracle, una vez por sesión) o qué hacer si no hay. */
+    private static String textoDireccion() {
+        try {
+            Direccion d = Restaurant.getInstance().miDireccion();
+            return d == null ? "Sin dirección · la pedimos al confirmar" : d.texto();
+        } catch (DaoException ex) {
+            System.err.println("[DAO] " + ex.getMessage() + " -> " + ex.getCause());
+            return "No se pudo cargar";
+        }
     }
 
     /** Tarjeta real del cliente (Oracle, una vez por sesión) o qué hacer si no hay. */

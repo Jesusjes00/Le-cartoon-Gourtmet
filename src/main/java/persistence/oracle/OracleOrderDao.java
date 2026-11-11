@@ -104,13 +104,13 @@ public class OracleOrderDao implements OrderDao {
     }
     
     @Override
-    public int registrar(int idCliente, double total, List<ItemPedido> items) {
+    public int registrar(int idCliente, int idDireccion, double total, List<ItemPedido> items) {
         // 'total' no se guarda: PEDIDO no tiene columna de total, se recalcula en pedidosDe().
         try (Connection con = ConnectionFactory.getConnection()) {
             con.setAutoCommit(false);
             try {
                 int idSucursal = sucursalDe(con, idCliente);
-                int idPedido = insertarPedido(con, idCliente, idSucursal);
+                int idPedido = insertarPedido(con, idCliente, idSucursal, idDireccion);
                 insertarDetalles(con, idPedido, items);
                 con.commit();
                 return idPedido;
@@ -135,11 +135,12 @@ public class OracleOrderDao implements OrderDao {
         }
     }
 
-    private int insertarPedido(Connection con, int idCliente, int idSucursal) throws SQLException {
-        String sql = "INSERT INTO pedido (id_status, id_sucursal, id_cliente, fecha) VALUES (1, ?, ?, SYSDATE)";
+    private int insertarPedido(Connection con, int idCliente, int idSucursal, int idDireccion) throws SQLException {
+        String sql = "INSERT INTO pedido (id_status, id_sucursal, id_cliente, id_direccion, fecha) VALUES (1, ?, ?, ?, SYSDATE)";
         try (PreparedStatement ps = con.prepareStatement(sql, new String[] { "ID_PEDIDO" })) {
             ps.setInt(1, idSucursal);
             ps.setInt(2, idCliente);
+            ps.setInt(3, idDireccion);                     // a dónde se entrega (antes iba NULL)
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
                 if (keys.next()) return keys.getInt(1);

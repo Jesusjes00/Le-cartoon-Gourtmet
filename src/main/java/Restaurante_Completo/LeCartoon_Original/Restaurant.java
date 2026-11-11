@@ -8,6 +8,7 @@ import Restaurante_Completo.LeCartoon_Original.Carrito.ItemPedido;
 import persistence.CustomerDao;
 import persistence.DaoException;
 import persistence.DaoFactory;
+import persistence.DireccionDao;
 import persistence.OrderDao;
 import persistence.PedidoDocDao;
 import persistence.TarjetaDao;
@@ -21,10 +22,13 @@ public final class Restaurant {
     private final OrderDao pedidos = DaoFactory.pedidos();
     private final PedidoDocDao documentos = DaoFactory.documentos();
     private final TarjetaDao tarjetas = DaoFactory.tarjetas();
+    private final DireccionDao direcciones = DaoFactory.direcciones();
 
     private Costumer cliente;          // sesión actual (null = nadie ha entrado)
     private MetodoPago tarjeta;        // tarjeta del cliente en sesión (null = no tiene)
     private boolean tarjetaCargada;    // ya se preguntó a Oracle en esta sesión
+    private Direccion direccion;       // dirección de entrega del cliente en sesión (null = no tiene)
+    private boolean direccionCargada;
 
     private Restaurant() { }
 
@@ -51,12 +55,12 @@ public final class Restaurant {
 
     public void cerrarSesion() {
         cliente = null;
-        olvidarTarjeta();
+        olvidarCache();
     }
 
     private void iniciarSesion(Costumer c) {
         cliente = c;
-        olvidarTarjeta();              // la tarjeta del cliente anterior no debe colarse
+        olvidarCache();                // la tarjeta y la dirección del cliente anterior no deben colarse
     }
 
     public Costumer getCliente() {
@@ -100,9 +104,64 @@ public final class Restaurant {
         return tarjeta;
     }
 
-    private void olvidarTarjeta() {
+    // ---------- Dirección de entrega ----------
+
+    /**
+     * Dirección activa del cliente en sesión, o null si no tiene.
+     * Igual que la tarjeta: una consulta por sesión, porque el carrito se reconstruye en cada +/−.
+     */
+    public Direccion miDireccion() {
+        exigirSesion();
+        if (!direccionCargada) {
+            direccion = direcciones.direccionDe(cliente.getId());
+            direccionCargada = true;
+        }
+        return direccion;
+    }
+
+    /** Municipio, ciudad y colonias de un CP; null si no son 5 dígitos o si no entregamos ahí. */
+    public ZonaCobertura zonaDe(String cp) {
+        String limpio = cp == null ? "" : cp.trim();
+        if (!limpio.matches("\\d{5}")) return null;    // ni vale la pena preguntarle a Oracle
+        return direcciones.zonaDe(limpio);
+    }
+
+    /**
+     * Guarda la dirección del cliente (alta o cambio) y la deja como su única dirección.
+     * Si no cambió nada, no toca Oracle. Lanza IllegalArgumentException si falta un dato.
+     */
+    public Direccion guardarDireccion(ZonaCobertura.Colonia colonia, String calle, String numExterior, String numInterior) {
+        exigirSesion();
+        String c   = limpiar(calle);
+        String ext = limpiar(numExterior);
+        String in  = limpiar(numInterior);
+        if (colonia == null)                 throw new IllegalArgumentException("Elige tu colonia");
+        if (c.isEmpty() || c.length() > 100) throw new IllegalArgumentException("Escribe tu calle (máximo 100 caracteres)");
+        if (ext.isEmpty() || ext.length() > 20) throw new IllegalArgumentException("Escribe tu número exterior");
+        if (in.length() > 20)                throw new IllegalArgumentException("El número interior es muy largo");
+
+        Direccion actual = miDireccion();
+        if (actual != null && actual.getColonia().equalsIgnoreCase(colonia.nombre())
+                && actual.getCalle().equalsIgnoreCase(c) && actual.getNumexterior().equalsIgnoreCase(ext)
+                && limpiar(actual.getNuminterior()).equalsIgnoreCase(in)) {
+            return actual;                                  // misma dirección: no se crea otra fila
+        }
+        direcciones.guardar(cliente.getId(), colonia.id(), c, ext, in.isEmpty() ? null : in);
+        direccion = direcciones.direccionDe(cliente.getId());   // se relee: lo que se ve es lo que quedó en Oracle
+        direccionCargada = true;
+        return direccion;
+    }
+
+    /** Quita espacios de más: "  Insurgentes   Sur " -> "Insurgentes Sur". */
+    private static String limpiar(String s) {
+        return s == null ? "" : s.trim().replaceAll("\\s+", " ");
+    }
+
+    private void olvidarCache() {
         tarjeta = null;
         tarjetaCargada = false;
+        direccion = null;
+        direccionCargada = false;
     }
 
     // ---------- Pedidos ----------
@@ -125,7 +184,11 @@ public final class Restaurant {
         if (items == null || items.isEmpty()) {
             throw new IllegalArgumentException("El carrito está vacío");
         }
-        int id = pedidos.registrar(cliente.getId(), total, items);      // 1) Oracle: fuente de verdad
+        Direccion entrega = miDireccion();
+        if (entrega == null) {
+            throw new IllegalStateException("Agrega tu dirección de entrega antes de pedir");
+        }
+        int id = pedidos.registrar(cliente.getId(), entrega.getId(), total, items);  // 1) Oracle: fuente de verdad
         EstadosVistos.marcar(cliente.getId(), id, 1);                   // el cliente lo vio nacer en "Preparando"
         try {
             documentos.crear(id, cliente, pedidos.sucursalDePedido(id), items);  // 2) copia en Couchbase
