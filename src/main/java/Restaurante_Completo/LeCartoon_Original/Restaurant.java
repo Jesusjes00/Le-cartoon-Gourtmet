@@ -1,5 +1,6 @@
 package Restaurante_Completo.LeCartoon_Original;
 
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -9,6 +10,7 @@ import persistence.DaoException;
 import persistence.DaoFactory;
 import persistence.OrderDao;
 import persistence.PedidoDocDao;
+import persistence.TarjetaDao;
 
 
 public final class Restaurant {
@@ -18,8 +20,11 @@ public final class Restaurant {
     private final CustomerDao clientes = DaoFactory.clientes();
     private final OrderDao pedidos = DaoFactory.pedidos();
     private final PedidoDocDao documentos = DaoFactory.documentos();
+    private final TarjetaDao tarjetas = DaoFactory.tarjetas();
 
     private Costumer cliente;          // sesión actual (null = nadie ha entrado)
+    private MetodoPago tarjeta;        // tarjeta del cliente en sesión (null = no tiene)
+    private boolean tarjetaCargada;    // ya se preguntó a Oracle en esta sesión
 
     private Restaurant() { }
 
@@ -32,7 +37,7 @@ public final class Restaurant {
     /** Regresa el cliente y lo deja como sesión; null si email/contraseña no coinciden. */
     public Costumer login(String email, String password) {
         Costumer c = clientes.login(email, password);
-        if (c != null) cliente = c;
+        if (c != null) iniciarSesion(c);
         return c;
     }
 
@@ -40,12 +45,18 @@ public final class Restaurant {
     public Costumer registrar(Costumer nuevo) {
         int id = clientes.registrar(nuevo);
         nuevo.setId(id);
-        cliente = nuevo;
+        iniciarSesion(nuevo);
         return nuevo;
     }
 
     public void cerrarSesion() {
         cliente = null;
+        olvidarTarjeta();
+    }
+
+    private void iniciarSesion(Costumer c) {
+        cliente = c;
+        olvidarTarjeta();              // la tarjeta del cliente anterior no debe colarse
     }
 
     public Costumer getCliente() {
@@ -54,6 +65,44 @@ public final class Restaurant {
 
     public void actualizarPerfil(Costumer c) {
         clientes.actualizarPerfil(c);
+    }
+
+    // ---------- Método de pago ----------
+
+    /**
+     * Tarjeta más reciente del cliente en sesión, o null si no tiene.
+     * Se pregunta a Oracle una sola vez por sesión: el carrito se reconstruye en cada +/−
+     * y no queremos un viaje a Prometeo por cada clic.
+     */
+    public MetodoPago metodoPago() {
+        if (cliente == null) throw new IllegalStateException("No hay un cliente con sesión iniciada");
+        if (!tarjetaCargada) {
+            tarjeta = tarjetas.tarjetaDe(cliente.getId());
+            tarjetaCargada = true;     // solo si Oracle respondió (si lanzó, se reintenta la próxima vez)
+        }
+        return tarjeta;
+    }
+
+    /**
+     * Valida y guarda una tarjeta nueva; desde ese momento es la que usa el cliente.
+     * Lanza IllegalArgumentException si un dato no es válido y DaoException si Oracle falla.
+     */
+    public MetodoPago agregarTarjeta(String numero, YearMonth vence, String cvv) {
+        if (cliente == null) throw new IllegalStateException("No hay un cliente con sesión iniciada");
+        String n = MetodoPago.soloDigitos(numero);
+        if (!MetodoPago.numeroValido(n)) throw new IllegalArgumentException("El número de tarjeta no es válido");
+        if (vence == null || vence.isBefore(YearMonth.now())) throw new IllegalArgumentException("La fecha de vencimiento no es válida");
+        if (!MetodoPago.cvvValido(cvv)) throw new IllegalArgumentException("El CVV debe tener 3 o 4 dígitos");
+
+        int id = tarjetas.registrar(cliente.getId(), n, vence, cvv.trim());
+        tarjeta = new MetodoPago(id, n.substring(0, 1), n.substring(n.length() - 4), vence);
+        tarjetaCargada = true;
+        return tarjeta;
+    }
+
+    private void olvidarTarjeta() {
+        tarjeta = null;
+        tarjetaCargada = false;
     }
 
     // ---------- Pedidos ----------

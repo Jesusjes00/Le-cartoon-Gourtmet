@@ -207,7 +207,7 @@ public class ProfileScreen extends JPanel {
 	/** Marca en el menú la opción que corresponde al panel que se está mostrando. */
 	private void seleccionarPor(JPanel panel) {
 		if (panel instanceof Personalinfo) seleccionar(infoBtn);
-		else if (panel instanceof Payment) seleccionar(payBtn);
+		else if (panel instanceof Payment || panel instanceof AgregarTarjeta) seleccionar(payBtn);
 		else if (panel instanceof Addresses) seleccionar(addressBtn);
 		else if (panel instanceof OrderHistory) seleccionar(ordersBtn);
 		else seleccionar(null);   // Editar perfil: ninguna

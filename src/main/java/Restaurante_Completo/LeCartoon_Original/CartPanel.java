@@ -134,7 +134,7 @@ public class CartPanel extends JPanel {
         agregar(panelResumen, crearInfoBox("localizacion.png", "DIRECCIÓN DE ENTREGA",
                 Restaurant.getInstance().getCliente().getAddress()));
         panelResumen.add(Box.createVerticalStrut(10));
-        agregar(panelResumen, crearInfoBox("card.png", "MÉTODO DE PAGO", "Visa •••• 1234"));
+        agregar(panelResumen, crearInfoBox("card.png", "MÉTODO DE PAGO", textoMetodoPago()));
         panelResumen.add(Box.createVerticalStrut(24));
 
         // Botón Realizar Pedido: la acción principal de la pantalla (terracota)
@@ -349,6 +349,18 @@ public class CartPanel extends JPanel {
         fila.add(lbl, BorderLayout.WEST);
         fila.add(val, BorderLayout.EAST);
         return fila;
+    }
+
+    /** Tarjeta real del cliente (Oracle, una vez por sesión) o qué hacer si no hay. */
+    private static String textoMetodoPago() {
+        try {
+            MetodoPago mp = Restaurant.getInstance().metodoPago();
+            if (mp == null) return "Sin tarjeta · agrégala en tu perfil";
+            return mp.vencida() ? mp.corto() + " (vencida)" : mp.corto();
+        } catch (DaoException ex) {
+            System.err.println("[DAO] " + ex.getMessage() + " -> " + ex.getCause());
+            return "No se pudo cargar";
+        }
     }
 
     /** Recuadro blanco con borde: ícono + título pequeño + valor. */
