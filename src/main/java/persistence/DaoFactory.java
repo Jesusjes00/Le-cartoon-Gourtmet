@@ -1,6 +1,7 @@
 package persistence;
 
 import persistence.oracle.OracleCustomerDao;
+import persistence.oracle.OracleDireccionDao;
 import persistence.oracle.OracleOrderDao;
 import persistence.oracle.OracleTarjetaDao;
 import persistence.couchbase.CouchbasePedidoDocDao;
@@ -27,5 +28,9 @@ public final class DaoFactory {
 
     public static TarjetaDao tarjetas() {
         return new OracleTarjetaDao();
+    }
+
+    public static DireccionDao direcciones() {
+        return new OracleDireccionDao();
     }
 }

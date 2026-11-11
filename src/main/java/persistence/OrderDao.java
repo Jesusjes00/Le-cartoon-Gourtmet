@@ -15,7 +15,8 @@ public interface OrderDao {
 	//Cambiar el estado
 	void cambiarEstado(int idPedido,int estado);
 	//Insertar pedido mas los detalles en una sola transaccion ;regresa el id del pedido
-	int registrar(int idCliente,double total,List<ItemPedido> items);
+	//idDireccion: a dónde se entrega (PEDIDO.ID_DIRECCION)
+	int registrar(int idCliente, int idDireccion, double total, List<ItemPedido> items);
 	// reseña del pedido; null si todavía no lo califican
 	Resena resenaDe(int idPedido);
 	// guarda la reseña de un pedido entregado (solo una vez)
