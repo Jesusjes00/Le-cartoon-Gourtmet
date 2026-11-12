@@ -398,6 +398,11 @@ public class Main_Frame {
 		new SwingWorker<List<Order>, Void>() {
 			@Override
 			protected List<Order> doInBackground() {
+				try {
+					Restaurant.getInstance().asignarRepartidores();   // simula al vendedor al marcar Enviado
+				} catch (RuntimeException ex) {                       // si falla, igual se revisan los estados
+					System.err.println("[Vigilante] No se pudo asignar repartidor -> " + ex.getMessage());
+				}
 				return Restaurant.getInstance().pedidosConNovedades();
 			}
 
