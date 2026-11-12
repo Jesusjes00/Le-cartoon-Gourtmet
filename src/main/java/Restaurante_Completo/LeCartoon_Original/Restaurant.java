@@ -189,6 +189,10 @@ public final class Restaurant {
         if (entrega == null) {
             throw new IllegalStateException("Agrega tu dirección de entrega antes de pedir");
         }
+        MetodoPago tarjeta = metodoPago();
+        if (tarjeta == null || tarjeta.vencida()) {
+            throw new IllegalStateException("Agrega una tarjeta vigente antes de pedir");
+        }
         int id = pedidos.registrar(cliente.getId(), entrega.getId(), total, items);  // 1) Oracle: fuente de verdad
         EstadosVistos.marcar(cliente.getId(), id, 1);                   // el cliente lo vio nacer en "Preparando"
         try {

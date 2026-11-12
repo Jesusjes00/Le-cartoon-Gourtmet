@@ -149,6 +149,15 @@ public class CartPanel extends JPanel {
 							Main_Frame.irADireccionDesdeCarrito();
 							return;
 						}
+						// Regla: sin tarjeta vigente tampoco. Mismo flujo: formulario y de regreso al carrito.
+						MetodoPago tarjeta = Restaurant.getInstance().metodoPago();
+						if (tarjeta == null || tarjeta.vencida()) {
+							Toast.aviso(CartPanel.this, tarjeta == null
+									? "Agrega una tarjeta para pedir"
+									: "Tu tarjeta venció: agrega una nueva para pedir");
+							Main_Frame.irATarjetaDesdeCarrito();
+							return;
+						}
 						int id = Restaurant.getInstance().registrarPedido(Carrito.totalAPagar(), listaPedidos);
 					    Toast.exito(CartPanel.this, "Tu pedido #" + id + " fue realizado");
 					    Carrito.vaciar();
@@ -371,7 +380,7 @@ public class CartPanel extends JPanel {
     private static String textoMetodoPago() {
         try {
             MetodoPago mp = Restaurant.getInstance().metodoPago();
-            if (mp == null) return "Sin tarjeta · agrégala en tu perfil";
+            if (mp == null) return "Sin tarjeta · la pedimos al confirmar";
             return mp.vencida() ? mp.corto() + " (vencida)" : mp.corto();
         } catch (DaoException ex) {
             System.err.println("[DAO] " + ex.getMessage() + " -> " + ex.getCause());
