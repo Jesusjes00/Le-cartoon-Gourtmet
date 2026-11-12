@@ -3,6 +3,7 @@ package Restaurante_Completo.LeCartoon_Original;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import Restaurante_Completo.LeCartoon_Original.Carrito.ItemPedido;
 import persistence.CustomerDao;
@@ -191,7 +192,7 @@ public final class Restaurant {
         int id = pedidos.registrar(cliente.getId(), entrega.getId(), total, items);  // 1) Oracle: fuente de verdad
         EstadosVistos.marcar(cliente.getId(), id, 1);                   // el cliente lo vio nacer en "Preparando"
         try {
-            documentos.crear(id, cliente, pedidos.sucursalDePedido(id), items);  // 2) copia en Couchbase
+            documentos.crear(id, cliente, pedidos.sucursalDePedido(id), entrega, items);  // 2) copia en Couchbase
         } catch (DaoException e) {
             System.err.println("[Couchbase] El pedido " + id + " quedó solo en Oracle: "
                                + e.getMessage() + " -> " + e.getCause());
@@ -233,6 +234,24 @@ public final class Restaurant {
             }
         }
         return cambiados;
+    }
+
+    /**
+     * Simula al vendedor: si algún pedido del cliente ya va en Enviado y no tiene repartidor,
+     * se le asigna uno de su sucursal en Oracle (fuente de verdad) y después se copia a Couchbase.
+     * Lo llama el vigilante de Main_Frame cada 10 s, desde otro hilo.
+     */
+    public void asignarRepartidores() {
+        Costumer c = cliente;                           // copia local: otro hilo puede cerrar la sesión
+        if (c == null) return;
+        for (Map.Entry<Integer, Repartidor> a : pedidos.asignarRepartidores(c.getId()).entrySet()) {
+            try {
+                documentos.asignarRepartidor(a.getKey(), a.getValue());
+            } catch (DaoException e) {
+                System.err.println("[Couchbase] El repartidor del pedido " + a.getKey() + " quedó solo en Oracle: "
+                                   + e.getMessage() + " -> " + e.getCause());
+            }
+        }
     }
 
     /** Último estado que el cliente vio del pedido (si nunca lo vio aquí, el actual). */

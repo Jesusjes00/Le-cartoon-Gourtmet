@@ -1,9 +1,11 @@
 package persistence;
 
 import java.util.List;
+import java.util.Map;
 
 import Restaurante_Completo.LeCartoon_Original.Order;
 import Restaurante_Completo.LeCartoon_Original.OrderDetails;
+import Restaurante_Completo.LeCartoon_Original.Repartidor;
 import Restaurante_Completo.LeCartoon_Original.Resena;
 import Restaurante_Completo.LeCartoon_Original.Carrito.ItemPedido;
 
@@ -24,5 +26,9 @@ public interface OrderDao {
 	
 	// sucursal asignada al pedido (la usa el documento de Couchbase)
 	int sucursalDePedido(int idPedido);
+
+	// a los pedidos del cliente en Enviado/Entregado sin repartidor les asigna uno de su sucursal;
+	// regresa id_pedido -> repartidor asignado (vacío si no hubo)
+	Map<Integer, Repartidor> asignarRepartidores(int idCliente);
 
 }

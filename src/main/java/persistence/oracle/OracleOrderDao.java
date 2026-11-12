@@ -7,12 +7,15 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import Restaurante_Completo.LeCartoon_Original.Carrito;
 import Restaurante_Completo.LeCartoon_Original.Carrito.ItemPedido;
 import Restaurante_Completo.LeCartoon_Original.Order;
 import Restaurante_Completo.LeCartoon_Original.OrderDetails;
+import Restaurante_Completo.LeCartoon_Original.Repartidor;
 import Restaurante_Completo.LeCartoon_Original.Resena;
 import persistence.ConnectionFactory;
 import persistence.DaoException;
@@ -88,6 +91,52 @@ public class OracleOrderDao implements OrderDao {
         }
     }
     
+    /**
+     * Simulación del vendedor: a cada pedido del cliente que ya va en Enviado (o Entregado) y no tiene
+     * repartidor, se le asigna uno de SU sucursal (al azar si hay varios). Regresa id_pedido -> repartidor
+     * de los que se asignaron en esta llamada (vacío si no hubo).
+     * El "AND id_repartidor IS NULL" del UPDATE evita pisar uno ya asignado (por la página de Alan, p. ej.).
+     */
+    @Override
+    public Map<Integer, Repartidor> asignarRepartidores(int idCliente) {
+        String pendientes = "SELECT id_pedido, id_sucursal FROM pedido "
+                          + "WHERE id_cliente = ? AND id_status >= 2 AND id_repartidor IS NULL";
+        String elegir = "SELECT r.id_repartidor, "
+                      + "       pe.nombre || ' ' || pe.apellidopaterno "
+                      + "       || NVL2(pe.apellidomaterno, ' ' || pe.apellidomaterno, NULL) AS nombre, "
+                      + "       (SELECT MIN(t.telefono) FROM telefono t WHERE t.id_persona = pe.id_persona) AS telefono "
+                      + "FROM   repartidor r JOIN persona pe ON pe.id_persona = r.id_persona "
+                      + "WHERE  r.id_sucursal = ? "
+                      + "ORDER  BY DBMS_RANDOM.VALUE "
+                      + "FETCH FIRST 1 ROW ONLY";
+        String asignar = "UPDATE pedido SET id_repartidor = ? WHERE id_pedido = ? AND id_repartidor IS NULL";
+
+        Map<Integer, Repartidor> asignados = new LinkedHashMap<>();
+        try (Connection con = ConnectionFactory.getConnection();
+             PreparedStatement psPend = con.prepareStatement(pendientes);
+             PreparedStatement psElegir = con.prepareStatement(elegir);
+             PreparedStatement psAsignar = con.prepareStatement(asignar)) {
+            psPend.setInt(1, idCliente);
+            try (ResultSet pend = psPend.executeQuery()) {
+                while (pend.next()) {
+                    int idPedido = pend.getInt("id_pedido");
+                    psElegir.setInt(1, pend.getInt("id_sucursal"));
+                    try (ResultSet r = psElegir.executeQuery()) {
+                        if (!r.next()) continue;                // sucursal sin repartidores: se queda NULL
+                        Repartidor rep = new Repartidor(r.getInt("id_repartidor"),
+                                                        r.getString("nombre"), r.getString("telefono"));
+                        psAsignar.setInt(1, rep.id());
+                        psAsignar.setInt(2, idPedido);
+                        if (psAsignar.executeUpdate() == 1) asignados.put(idPedido, rep);
+                    }
+                }
+            }
+            return asignados;
+        } catch (SQLException e) {
+            throw new DaoException("No se pudieron asignar repartidores a los pedidos del cliente " + idCliente, e);
+        }
+    }
+
     @Override
     public int sucursalDePedido(int idPedido) {
         String sql = "SELECT id_sucursal FROM pedido WHERE id_pedido = ?";
@@ -109,7 +158,7 @@ public class OracleOrderDao implements OrderDao {
         try (Connection con = ConnectionFactory.getConnection()) {
             con.setAutoCommit(false);
             try {
-                int idSucursal = sucursalDe(con, idCliente);
+                int idSucursal = sucursalPara(con, idDireccion);
                 int idPedido = insertarPedido(con, idCliente, idSucursal, idDireccion);
                 insertarDetalles(con, idPedido, items);
                 con.commit();
@@ -123,16 +172,35 @@ public class OracleOrderDao implements OrderDao {
         }
     }
 
-    /** Sucursal donde está registrado el cliente; la 1 si no tiene. */
-    private int sucursalDe(Connection con, int idCliente) throws SQLException {
-        String sql = "SELECT NVL(MIN(id_sucursal), 1) FROM sucursal_cliente WHERE id_cliente = ?";
+    /**
+     * Sucursal que atiende la dirección de entrega: la que está en la MISMA alcaldía.
+     * Si en esa alcaldía no hubiera sucursal, la de menor id (no debería pasar: hay una por alcaldía).
+     * El CASE dentro del ORDER BY pone primero (0) a las de la misma alcaldía y después (1) al resto.
+     */
+    private int sucursalPara(Connection con, int idDireccion) throws SQLException {
+        String sql = "SELECT s.id_sucursal "
+                   + "FROM   sucursal s "
+                   + "JOIN   direccion ds      ON ds.id_direccion = s.id_direccion "
+                   + "JOIN   calle cs          ON cs.id_calle     = ds.id_calle "
+                   + "JOIN   colonia cos       ON cos.id_colonia  = cs.id_colonia "
+                   + "JOIN   codigo_postal cps ON cps.id_cp       = cos.id_cp "
+                   + "ORDER  BY CASE WHEN cps.id_municipio = ("
+                   + "              SELECT cp.id_municipio "                       // alcaldía de la entrega
+                   + "              FROM   direccion d "
+                   + "              JOIN   calle ca         ON ca.id_calle   = d.id_calle "
+                   + "              JOIN   colonia co       ON co.id_colonia = ca.id_colonia "
+                   + "              JOIN   codigo_postal cp ON cp.id_cp      = co.id_cp "
+                   + "              WHERE  d.id_direccion = ?) "
+                   + "            THEN 0 ELSE 1 END, "
+                   + "          s.id_sucursal "
+                   + "FETCH FIRST 1 ROW ONLY";
         try (PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setInt(1, idCliente);
+            ps.setInt(1, idDireccion);
             try (ResultSet rs = ps.executeQuery()) {
-                rs.next();
-                return rs.getInt(1);
+                if (rs.next()) return rs.getInt(1);
             }
         }
+        throw new SQLException("No hay sucursales registradas");
     }
 
     private int insertarPedido(Connection con, int idCliente, int idSucursal, int idDireccion) throws SQLException {
