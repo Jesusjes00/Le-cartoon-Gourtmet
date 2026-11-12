@@ -13,7 +13,10 @@ import javax.swing.JPasswordField;
 import javax.swing.JTextField;
 
 import Restaurante_Completo.LeCartoon_Original.Buttons;
+import Restaurante_Completo.LeCartoon_Original.Carrito;
+import Restaurante_Completo.LeCartoon_Original.CartPanel;
 import Restaurante_Completo.LeCartoon_Original.Costumer;
+import Restaurante_Completo.LeCartoon_Original.Main_Frame;
 import Restaurante_Completo.LeCartoon_Original.MetodoPago;
 import Restaurante_Completo.LeCartoon_Original.Restaurant;
 import persistence.DaoException;
@@ -31,8 +34,14 @@ public class AgregarTarjeta extends JPanel {
 	private final JTextField numeroField;
 	private final JTextField venceField;
 	private final JPasswordField cvvField;
+	private final boolean volverAlCarrito;           // true si llegó aquí desde "Realizar pedido"
 
 	public AgregarTarjeta() {
+		this(false);
+	}
+
+	public AgregarTarjeta(boolean volverAlCarrito) {
+		this.volverAlCarrito = volverAlCarrito;
 		setOpaque(false);
 		setLayout(new BorderLayout());
 
@@ -137,7 +146,7 @@ public class AgregarTarjeta extends JPanel {
 
 		try {
 			MetodoPago nueva = Restaurant.getInstance().agregarTarjeta(numero, vence, cvv);
-			Toast.exito(this, "Se guardó tu " + nueva.corto());
+			Toast.exito(this, volverAlCarrito ? "Listo, ya puedes hacer tu pedido" : "Se guardó tu " + nueva.corto());
 			volver();
 		} catch (IllegalArgumentException ex) {          // no debería pasar: ya se validó arriba
 			Toast.aviso(this, ex.getMessage());
@@ -147,7 +156,12 @@ public class AgregarTarjeta extends JPanel {
 		}
 	}
 
+	/** Regresa al carrito si venía de ahí (y tiene algo), si no a "Método de pago". */
 	private void volver() {
+		if (volverAlCarrito && !Carrito.estaVacio()) {
+			Main_Frame.changeDynamicPanel(new CartPanel(Carrito.getPedidos()));
+			return;
+		}
 		ProfileScreen.changePanel(new Payment());
 		Payment.changedCostumer(Restaurant.getInstance().getCliente());
 	}

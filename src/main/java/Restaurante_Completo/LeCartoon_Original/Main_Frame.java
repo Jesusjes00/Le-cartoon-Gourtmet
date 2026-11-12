@@ -294,6 +294,12 @@ public class Main_Frame {
 		ProfileScreen.changePanel(new ProfileScreens.EditarDireccion(true));
 	}
 
+	/** Perfil abierto en el formulario de tarjeta; al guardar regresa al carrito (lo usa "Realizar pedido"). */
+	public static void irATarjetaDesdeCarrito() {
+		changeDynamicPanel(new ProfileScreen());
+		ProfileScreen.changePanel(new ProfileScreens.AgregarTarjeta(true));
+	}
+
 	/** Pone "Carrito (n)" con las unidades actuales. Llamar después de agregar o quitar platillos. */
 	public static void actualizarCarrito() {
 		if (btnCarrito != null) btnCarrito.setText("Carrito (" + Carrito.totalUnidades() + ")");
