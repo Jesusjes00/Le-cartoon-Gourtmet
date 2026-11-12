@@ -1,9 +1,18 @@
 # Referencia técnica · Le Cartoon Gourmet
 
-Documentación clase por clase del código en la rama `data`: qué hace cada clase o interfaz, sus constructores y sus métodos públicos, y cómo se conectan entre sí.
+Documentación clase por clase del código: qué hace cada clase o interfaz, sus constructores y sus métodos públicos, y cómo se conectan entre sí.
 
 > Para la visión general (capturas, instalación y configuración) ve al [README](../README.md).
 > Convención: en las tablas, **`static`** indica método de clase. Los métodos privados solo se mencionan cuando explican cómo funciona algo.
+
+**Ramas del repositorio**
+
+| Rama | Con qué usuario entra la app a Oracle | Para qué |
+|---|---|---|
+| `data` | `CIB500_05` (dueño de las tablas, el esquema de Alan) | Versión estable. |
+| `Client_data` | `CIB500_14` (cuenta **cliente**, con los permisos de la matriz de seguridad) | La app se comporta como cliente real. El SQL de los DAOs es idéntico; solo cambia `ConnectionFactory` (ver [sección 3](#3-datos-oracle-couchbase-y-las-dos-ramas)). |
+
+Este documento sirve para las dos ramas; donde algo solo aplica a `Client_data` se indica.
 
 ---
 
@@ -11,18 +20,19 @@ Documentación clase por clase del código en la rama `data`: qué hace cada cla
 
 1. [Cómo arranca la app](#1-cómo-arranca-la-app)
 2. [Mapa de paquetes](#2-mapa-de-paquetes)
-3. [Núcleo del negocio](#3-núcleo-del-negocio-restaurante_completolecartoon_original)
-4. [Patrón State: estados del pedido](#4-patrón-state-estados-del-pedido)
-5. [Catálogo: `Dishes` y `Franchises`](#5-catálogo-dishes-y-franchises)
-6. [Persistencia: `persistence`](#6-persistencia-persistence)
-7. [Pantallas principales](#7-pantallas-principales)
-8. [Seguimiento y reseñas: `OrderDetails`](#8-seguimiento-y-reseñas-orderdetails)
-9. [Perfil: `ProfileScreens`](#9-perfil-profilescreens)
-10. [Componentes de interfaz: `ui` y `ui.theme`](#10-componentes-de-interfaz-ui-y-uitheme)
-11. [Flujos completos paso a paso](#11-flujos-completos-paso-a-paso)
-12. [Manejo de errores](#12-manejo-de-errores)
-13. [Cómo extender el proyecto](#13-cómo-extender-el-proyecto)
-14. [Mejoras conocidas](#14-mejoras-conocidas)
+3. [Datos: Oracle, Couchbase y las dos ramas](#3-datos-oracle-couchbase-y-las-dos-ramas)
+4. [Núcleo del negocio](#4-núcleo-del-negocio-restaurante_completolecartoon_original)
+5. [Patrón State: estados del pedido](#5-patrón-state-estados-del-pedido)
+6. [Catálogo: `Dishes` y `Franchises`](#6-catálogo-dishes-y-franchises)
+7. [Persistencia: `persistence`](#7-persistencia-persistence)
+8. [Pantallas principales](#8-pantallas-principales)
+9. [Seguimiento y reseñas: `OrderDetails`](#9-seguimiento-y-reseñas-orderdetails)
+10. [Perfil: `ProfileScreens`](#10-perfil-profilescreens)
+11. [Componentes de interfaz: `ui` y `ui.theme`](#11-componentes-de-interfaz-ui-y-uitheme)
+12. [Flujos completos paso a paso](#12-flujos-completos-paso-a-paso)
+13. [Manejo de errores](#13-manejo-de-errores)
+14. [Cómo extender el proyecto](#14-cómo-extender-el-proyecto)
+15. [Mejoras conocidas](#15-mejoras-conocidas)
 
 ---
 
@@ -32,23 +42,28 @@ Documentación clase por clase del código en la rama `data`: qué hace cada cla
 sequenceDiagram
     participant A as App.main
     participant T as Theme
+    participant CB as CouchbaseFactory
     participant L as Login_Window
     participant R as Restaurant
     participant M as Main_Frame
 
     A->>T: install() — fuentes, FlatLaf y colores
     A->>L: main(args) — abre la ventana de inicio de sesión
+    A-)CB: pedidos() en el hilo "couchbase-arranque" (pre-conecta, ~3 s)
+    A->>A: shutdown hook → CouchbaseFactory.cerrar()
     L->>R: login(correo, contraseña)
     R-->>L: Costumer (o null si no coincide)
     L->>M: new Main_Frame().showmainframe(true, cliente)
     M->>M: changeDynamicPanel(new MainFramePanel())
+    M->>M: iniciarVigilante() — revisa los pedidos cada 10 s
     Note over L: frame.dispose() — se cierra el login
 ```
 
 1. **`App.main`** llama a `Theme.install()` **una sola vez**, antes de crear cualquier ventana. Así todos los componentes de Swing nacen ya con el tema.
-2. **`Login_Window`** pide correo y contraseña y llama a `Restaurant.getInstance().login(...)`.
-3. Si el login sale bien, `Restaurant` guarda al cliente como **sesión**, se crea **`Main_Frame`** y se cierra el login.
-4. `Main_Frame` tiene un **header fijo** y un **panel dinámico**: cada pantalla es un `JPanel` que se coloca ahí con `Main_Frame.changeDynamicPanel(panel)`.
+2. Abre **`Login_Window`** y, **en otro hilo**, conecta a Couchbase Capella: la primera conexión tarda unos 3 s y así ocurre mientras el usuario escribe su correo. Si falla, solo se imprime `[Couchbase] …` y la app sigue con Oracle.
+3. Registra un **shutdown hook** que cierra el `Cluster` de Couchbase al salir (también con `System.exit`).
+4. Si el login sale bien, `Restaurant` guarda al cliente como **sesión**, se crea **`Main_Frame`** y se cierra el login.
+5. `Main_Frame` tiene un **header fijo** y un **panel dinámico**: cada pantalla es un `JPanel` que se coloca ahí con `Main_Frame.changeDynamicPanel(panel)`. Al crearse arranca el **vigilante** (ver [sección 8](#8-pantallas-principales)).
 
 ---
 
@@ -56,14 +71,15 @@ sequenceDiagram
 
 | Paquete | Contenido | Depende de |
 |---|---|---|
-| `Restaurante_Completo.LeCartoon_Original` | Punto de entrada, modelo (`Costumer`, `Order`, `Resena`…), reglas (`Restaurant`, `Carrito`), pantallas principales y botones | `persistence`, `ui`, `Dishes`, `Franchises` |
+| `Restaurante_Completo.LeCartoon_Original` | Punto de entrada, modelo (`Costumer`, `Order`, `Resena`, `MetodoPago`, `Direccion`, `ZonaCobertura`, `Repartidor`…), reglas (`Restaurant`, `Carrito`, `EstadosVistos`), pantallas principales y botones | `persistence`, `ui`, `Dishes`, `Franchises` |
 | `Dishes` | Clase base `Dishes` y 28 platillos | — |
 | `Franchises` | Clase base `Franchises` y 5 franquicias | — |
-| `persistence` | Conexión, fábrica de DAO, interfaces DAO y excepción | modelo |
-| `persistence.oracle` | Implementación de los DAO para Oracle 19c (esquema de Alan) | `persistence` |
-| `OrderDetails` | Pantalla de seguimiento, *stepper*, estrellas y reseña | núcleo, `ui.theme` |
-| `ProfileScreens` | Perfil y sus secciones | núcleo, `ui.theme` |
-| `ui` | `Toast` (avisos flotantes) | `ui.theme` |
+| `persistence` | Conexión a Oracle, fábrica de DAO, interfaces DAO, excepción y pruebas de humo | modelo |
+| `persistence.oracle` | DAOs para Oracle 19c (esquema de Alan) | `persistence` |
+| `persistence.couchbase` | Conexión a Couchbase Capella y DAO del documento del pedido | `persistence`, SDK de Couchbase |
+| `OrderDetails` | Pantalla de seguimiento, *stepper*, estrellas y reseña | núcleo, `ui`, `ui.theme` |
+| `ProfileScreens` | Perfil y sus secciones (datos, pago, dirección, historial) | núcleo, `ui.theme` |
+| `ui` | `Toast` (avisos flotantes) y `PanelSwipe` (animación) | `ui.theme` |
 | `ui.theme` | Tema y componentes visuales reutilizables | FlatLaf |
 
 ```mermaid
@@ -72,63 +88,122 @@ classDiagram
     class Restaurant {
       <<Singleton · Facade>>
       -Costumer cliente
+      -MetodoPago tarjeta
+      -Direccion direccion
       +getInstance() Restaurant
       +login(email, password) Costumer
-      +registrar(Costumer) Costumer
-      +misPedidos() List~Order~
       +registrarPedido(total, items) int
-      +cambiarEstado(Order)
-      +resenaDe(idPedido) Resena
       +calificar(idPedido, Resena)
+      +metodoPago() MetodoPago
+      +agregarTarjeta(numero, vence, cvv) MetodoPago
+      +miDireccion() Direccion
+      +guardarDireccion(colonia, calle, ext, int) Direccion
+      +pedidosConNovedades() List~Order~
+      +asignarRepartidores()
     }
     class DaoFactory {
       <<Factory>>
       +clientes() CustomerDao
       +pedidos() OrderDao
+      +documentos() PedidoDocDao
+      +tarjetas() TarjetaDao
+      +direcciones() DireccionDao
     }
-    class CustomerDao {
-      <<interface>>
-      +login(email, password) Costumer
-      +registrar(Costumer) int
-      +actualizarPerfil(Costumer)
-    }
-    class OrderDao {
-      <<interface>>
-      +pedidosDe(idCliente) List~Order~
-      +detallesDe(idPedido) List~OrderDetails~
-      +cambiarEstado(idPedido, estado)
-      +registrar(idCliente, total, items) int
-      +resenaDe(idPedido) Resena
-      +calificar(idPedido, Resena)
-    }
+    class CustomerDao { <<interface>> }
+    class OrderDao { <<interface>> }
+    class TarjetaDao { <<interface>> }
+    class DireccionDao { <<interface>> }
+    class PedidoDocDao { <<interface>> }
     class OracleCustomerDao
     class OracleOrderDao
+    class OracleTarjetaDao
+    class OracleDireccionDao
+    class CouchbasePedidoDocDao
     class ConnectionFactory {
       +getConnection() Connection
+    }
+    class CouchbaseFactory {
+      +pedidos() Collection
     }
     class Order {
       -State state
       +changeState()
     }
-    class State {
-      <<interface>>
-    }
+    class State { <<interface>> }
     Restaurant --> DaoFactory : pide los DAO
     Restaurant --> CustomerDao
     Restaurant --> OrderDao
+    Restaurant --> TarjetaDao
+    Restaurant --> DireccionDao
+    Restaurant --> PedidoDocDao
     CustomerDao <|.. OracleCustomerDao
     OrderDao <|.. OracleOrderDao
+    TarjetaDao <|.. OracleTarjetaDao
+    DireccionDao <|.. OracleDireccionDao
+    PedidoDocDao <|.. CouchbasePedidoDocDao
     OracleCustomerDao --> ConnectionFactory
     OracleOrderDao --> ConnectionFactory
+    OracleTarjetaDao --> ConnectionFactory
+    OracleDireccionDao --> ConnectionFactory
+    CouchbasePedidoDocDao --> CouchbaseFactory
     Order --> State
     State <|.. Preparing
     State <|.. Sent
     State <|.. Delivered
 ```
 
+**Patrones de diseño en el código**
+
+| Patrón | Dónde | Para qué |
+|---|---|---|
+| **Singleton** | `Restaurant` | Una sola sesión y un solo punto de acceso a los datos. |
+| **Facade** | `Restaurant` | Las pantallas no conocen DAOs, SQL ni Couchbase: llaman a `Restaurant` y él coordina (Oracle primero, Couchbase después). |
+| **Factory** | `DaoFactory`, fábricas de `Buttons` | Un solo lugar decide qué implementación se usa. |
+| **DAO** | `persistence.*Dao` | Aísla el SQL y el SDK de Couchbase detrás de interfaces. |
+| **State** | `Order` + `Preparing` / `Sent` / `Delivered` | Color, GIF, mensaje y siguiente estado sin `if`. |
+| **Extended Reference / Embedding / Schema Versioning** | Documento `pedido::<id>` en Couchbase | Ver [sección 7](#7-persistencia-persistence). |
+
 ---
 
-## 3. Núcleo del negocio (`Restaurante_Completo.LeCartoon_Original`)
+## 3. Datos: Oracle, Couchbase y las dos ramas
+
+**Oracle 19c (Prometeo) es la fuente de verdad.** Clientes, direcciones, tarjetas, pedidos, renglones, reseñas y repartidores viven ahí, en el esquema de Alan (`CIB500_05`).
+
+**Couchbase Capella guarda una copia del pedido** como documento (`ProyectoFinal.lecartoon.pedido`, llave `pedido::<id de Oracle>`), pensada para la página web de vendedores de Alan.
+
+**Regla de escritura: Oracle primero, Couchbase después.** `Restaurant` escribe en Oracle; solo si salió bien copia a Couchbase. Si Couchbase falla, se imprime `[Couchbase] … quedó solo en Oracle` y la operación **no** se cancela: el cliente nunca pierde un pedido porque la base NoSQL no respondió.
+
+| Operación | Oracle | Couchbase |
+|---|---|---|
+| Hacer pedido | `INSERT PEDIDO` + `DETALLES_PEDIDO` (transacción) | `insert` del documento completo |
+| Reseñar | `UPDATE PEDIDO` (calificación y reseña) | `mutateIn`: `resena` y `fechaActualizacion` |
+| Asignar repartidor | `UPDATE PEDIDO SET ID_REPARTIDOR` | `mutateIn`: `repartidor` y `fechaActualizacion` |
+| Avanzar estado | Lo hace la **página del vendedor** | Lo hace la **página del vendedor** |
+
+**Rama `Client_data`: la app entra como cliente**
+
+En `Client_data` la app se conecta con `CIB500_14`, la cuenta **cliente** de la matriz de seguridad. Las tablas siguen siendo de `CIB500_05`. Para no reescribir el SQL, `ConnectionFactory` ejecuta al abrir cada conexión:
+
+```sql
+ALTER SESSION SET CURRENT_SCHEMA = CIB500_05
+```
+
+`CURRENT_SCHEMA` solo cambia **dónde busca Oracle los nombres sin prefijo** (`pedido` → `CIB500_05.pedido`); los **permisos** se siguen revisando como `CIB500_14`. Todo lo que hace la app está cubierto por los `GRANT` del script de seguridad:
+
+| Tablas | Uso en la app | Permiso de `CIB500_14` |
+|---|---|---|
+| `cliente`, `persona`, `telefono` | login, registro, perfil | SELECT, INSERT, UPDATE |
+| `pedido` | leer, crear, reseña, asignar repartidor | SELECT, INSERT, UPDATE |
+| `detalles_pedido` | leer, crear | SELECT, INSERT |
+| `tarjeta_cliente` | leer, agregar | SELECT, INSERT, UPDATE |
+| `calle`, `direccion`, `persona_direccion` | guardar dirección | SELECT, INSERT, UPDATE, DELETE |
+| `pais` … `colonia`, `platillo`, `sucursal`, `repartidor` | solo lectura | SELECT |
+
+Los *triggers* (autoincremento y auditoría `_H`) se ejecutan con los permisos de su dueño, así que el cliente no necesita nada sobre secuencias ni tablas de histórico. Una operación sin permiso (por ejemplo `DELETE FROM pedido`) responde **ORA-01031**.
+
+---
+
+## 4. Núcleo del negocio (`Restaurante_Completo.LeCartoon_Original`)
 
 ### `App`
 
@@ -136,13 +211,13 @@ Clase con el `main` de la aplicación.
 
 | Método | Qué hace |
 |---|---|
-| **`static`** `main(String[] args)` | Llama a `Theme.install()` y abre `Login_Window.main(args)`. |
+| **`static`** `main(String[] args)` | `Theme.install()`, abre `Login_Window.main(args)`, pre-conecta Couchbase en el hilo `couchbase-arranque` y registra el *shutdown hook* que lo cierra. |
 
 ---
 
 ### `Restaurant` · *Singleton + Facade*
 
-`public final class`. Es el **único punto de entrada** de las pantallas a los datos y a las reglas de negocio. Guarda al cliente con sesión iniciada y delega en los DAO.
+`public final class`. Es el **único punto de entrada** de las pantallas a los datos y a las reglas de negocio. Guarda la sesión, coordina Oracle y Couchbase y delega en los DAO.
 
 **Cómo funciona el Singleton:** `private static final Restaurant INSTANCIA = new Restaurant();` crea la instancia al cargar la clase (*eager*). El constructor es `private`, así que nadie más puede hacer `new Restaurant()`.
 
@@ -150,26 +225,55 @@ Clase con el `main` de la aplicación.
 
 | Campo | Tipo | Para qué |
 |---|---|---|
-| `clientes` | `CustomerDao` | Se obtiene de `DaoFactory.clientes()` al crear la instancia. |
-| `pedidos` | `OrderDao` | Se obtiene de `DaoFactory.pedidos()`. |
+| `clientes`, `pedidos`, `documentos`, `tarjetas`, `direcciones` | `CustomerDao`, `OrderDao`, `PedidoDocDao`, `TarjetaDao`, `DireccionDao` | Se obtienen de `DaoFactory` al crear la instancia. |
 | `cliente` | `Costumer` | Sesión actual; `null` si nadie ha iniciado sesión. |
+| `tarjeta` + `tarjetaCargada` | `MetodoPago`, `boolean` | **Caché por sesión** de la tarjeta (ver `metodoPago()`). |
+| `direccion` + `direccionCargada` | `Direccion`, `boolean` | **Caché por sesión** de la dirección (ver `miDireccion()`). |
 
-**Métodos**
+**Sesión y perfil**
 
 | Método | Qué hace |
 |---|---|
 | **`static`** `getInstance()` | Regresa la única instancia. |
-| `login(String email, String password)` | Pide el cliente al DAO. Si existe, lo deja como sesión y lo regresa; si no, regresa `null`. |
+| `login(String email, String password)` | Pide el cliente al DAO. Si existe, lo deja como sesión y **olvida la caché** del cliente anterior; si no, regresa `null`. |
 | `registrar(Costumer nuevo)` | Inserta al cliente, le asigna el `id` que generó la base de datos (`setId`) y lo deja como sesión. |
-| `cerrarSesion()` | Pone la sesión en `null`. |
+| `cerrarSesion()` | Pone la sesión en `null` y olvida la caché de tarjeta y dirección. |
 | `getCliente()` | Cliente con sesión iniciada. |
 | `actualizarPerfil(Costumer c)` | Guarda nombre, apellido y teléfono. |
+
+**Pedidos y reseñas**
+
+| Método | Qué hace |
+|---|---|
 | `misPedidos()` | Pedidos del cliente en sesión, del más nuevo al más viejo. **Exige sesión**. |
 | `detallesDe(int idPedido)` | Renglones del pedido (`OrderDetails`). |
-| `cambiarEstado(Order pedido)` | Guarda `pedido.getId_state()` en la base de datos. |
-| `registrarPedido(double total, List<ItemPedido> items)` | Exige sesión y que el carrito no esté vacío (si lo está, lanza `IllegalArgumentException`). Guarda el pedido y sus renglones en una transacción y regresa el id del pedido. |
+| `registrarPedido(double total, List<ItemPedido> items)` | **Reglas:** exige sesión, carrito con algo (`IllegalArgumentException`), **dirección de entrega** y **tarjeta vigente** (`IllegalStateException` si falta alguna). Luego: 1) Oracle registra el pedido en una transacción; 2) `EstadosVistos` lo marca visto en "Preparando"; 3) crea el documento en Couchbase con la dirección. Regresa el id del pedido. |
 | `resenaDe(int idPedido)` | Reseña guardada del pedido, o `null` si todavía no lo califican. |
-| `calificar(int idPedido, Resena resena)` | **Exige sesión.** Guarda la reseña en el pedido (solo si está entregado y no tenía reseña). |
+| `calificar(int idPedido, Resena resena)` | **Exige sesión.** 1) Oracle (solo si está entregado y sin reseña); 2) Couchbase. |
+| `cambiarEstado(Order pedido)` | Guarda `pedido.getId_state()` en Oracle. Ya no lo usa ninguna pantalla (el estado lo avanza el vendedor); se conserva para pruebas. |
+
+**Método de pago**
+
+| Método | Qué hace |
+|---|---|
+| `metodoPago()` | Tarjeta más reciente del cliente o `null`. Pregunta a Oracle **una sola vez por sesión**: el carrito se reconstruye en cada +/− y no conviene ir a Prometeo en cada clic. |
+| `agregarTarjeta(String numero, YearMonth vence, String cvv)` | Valida (Luhn, no vencida, CVV de 3–4 dígitos; si no, `IllegalArgumentException`), la guarda en Oracle y la deja como la tarjeta de la sesión. |
+
+**Dirección de entrega**
+
+| Método | Qué hace |
+|---|---|
+| `miDireccion()` | Dirección activa del cliente o `null`. Misma caché por sesión que la tarjeta. |
+| `zonaDe(String cp)` | Municipio, ciudad y colonias de un CP de la **zona de cobertura**; `null` si no son 5 dígitos (ni pregunta a Oracle) o si no entregamos ahí. |
+| `guardarDireccion(ZonaCobertura.Colonia colonia, String calle, String numExterior, String numInterior)` | Limpia espacios, valida (colonia elegida, calle ≤ 100, número exterior ≤ 20; si no, `IllegalArgumentException`). **Si es la misma dirección que ya tenía, no toca Oracle.** Si cambió, guarda una dirección nueva y la vuelve a leer de Oracle. |
+
+**Seguimiento** (los usa el vigilante de `Main_Frame` desde otro hilo)
+
+| Método | Qué hace |
+|---|---|
+| `pedidosConNovedades()` | Pedidos cuyo estado en Oracle es mayor que el último que el cliente vio en esta computadora (`EstadosVistos`). |
+| `asignarRepartidores()` | **Simula al vendedor:** a los pedidos del cliente en Enviado o Entregado sin repartidor, Oracle les asigna uno de su sucursal; después cada asignación se copia a Couchbase. Sin sesión, no hace nada. |
+| `estadoVisto(Order)` / `marcarVisto(int idPedido, int estado)` | Lee o anota en `EstadosVistos`. |
 | *privado* `exigirSesion()` | Lanza `IllegalStateException` si no hay cliente. |
 
 ---
@@ -184,6 +288,8 @@ Modelo del cliente. *(El nombre conserva la ortografía original del proyecto.)*
 | `Costumer(int id, String name, String lastName, String phone, String email, String password, String address)` | Cliente **leído de la base de datos**, ya con su `id`. |
 
 Métodos: *getters* y *setters* de `id`, `name`, `lastName`, `phone`, `email`, `password`; `getAddress()` / `setAddress1(String)`; `toString()`.
+
+> `address` es un campo heredado del diseño original y hoy vale `" "`. **La dirección de entrega real vive en Oracle** y se maneja con `Direccion` (ver más abajo) a través de `Restaurant.miDireccion()`.
 
 ---
 
@@ -228,7 +334,7 @@ Métodos: *getters* y *setters* de `id`, `name`, `lastName`, `phone`, `email`, `
 
 ### `Order`
 
-Pedido ya registrado. Contiene un objeto `State` que cambia según la etapa (ver [sección 4](#4-patrón-state-estados-del-pedido)).
+Pedido ya registrado. Contiene un objeto `State` que cambia según la etapa (ver [sección 5](#5-patrón-state-estados-del-pedido)).
 
 | Campo | Significado |
 |---|---|
@@ -278,13 +384,70 @@ Reseña de un pedido entregado. Es **inmutable**: todos sus campos son `final` y
 
 ---
 
-## 4. Patrón State: estados del pedido
+### `MetodoPago`
+
+Tarjeta guardada del cliente **ya enmascarada**: la app nunca tiene en memoria el número completo ni el CVV, solo la marca y los últimos 4 dígitos. Es **inmutable**.
+
+| Miembro | Qué hace |
+|---|---|
+| `MetodoPago(int id, String primerDigito, String ultimos4, YearMonth vence)` | La marca sale del primer dígito: 4 = VISA, 5 o 2 = MASTERCARD, 3 = AMEX; otro = TARJETA. |
+| `getId()`, `getMarca()`, `getUltimos4()`, `getVence()` | Lectura. |
+| `enmascarado()` / `corto()` / `venceTexto()` | `"•••• •••• •••• 1111"`, `"VISA •••• 1111"`, `"05/29"`. |
+| `vencida()` | `true` si su mes ya pasó: `10/26` sirve hasta el 31 de octubre de 2026. |
+| **`static`** `soloDigitos(String)` | Quita espacios y guiones. |
+| **`static`** `numeroValido(String)` | 13–19 dígitos y que pase el **algoritmo de Luhn** (detecta errores de dedo). |
+| **`static`** `cvvValido(String)` | 3 o 4 dígitos. |
+| **`static`** `leerVence(String)` | `"05/29"` o `"0529"` → `YearMonth`; `null` si no tiene ese formato. |
+
+### `Direccion`
+
+Dirección de entrega completa: los nombres de toda la cadena del catálogo (`pais → estado → ciudad → municipio → codigo_postal → colonia → calle`) más los números de `DIRECCION`.
+
+| Miembro | Qué hace |
+|---|---|
+| `Direccion(pais, estado, ciudad, municipio, cp, colonia, calle, numexterior, numinterior)` | Sin id (constructor original). |
+| `Direccion(int id, …mismos campos…)` | Con el `ID_DIRECCION` de Oracle. |
+| `getId()` y *getters/setters* de cada campo | — |
+| `calleYNumero()` | `"Insurgentes Sur 300 int. B"` (el interior solo si hay). |
+| `texto()` | Dirección completa en una línea, para el perfil y el carrito. |
+
+### `ZonaCobertura` · *record*
+
+Lo que la app sabe de un código postal de la zona de cobertura. Es un **`record`** (Java 16+): una clase inmutable cuyo constructor, *getters* (`zona.municipio()`), `equals` y `toString` los escribe el compilador.
+
+| Miembro | Qué hace |
+|---|---|
+| `ZonaCobertura(cp, municipio, ciudad, estado, pais, List<Colonia> colonias)` | — |
+| `record Colonia(int id, String nombre)` | Una colonia del catálogo. Su `toString()` es el nombre, que es lo que muestra el `JComboBox`. |
+| `lugar()` | `"Benito Juárez, CDMX"`. |
+| `colonia(String nombre)` | La colonia con ese nombre (sin importar mayúsculas) o `null`. Sirve al editar una dirección. |
+
+### `Repartidor` · *record*
+
+`record Repartidor(int id, String nombre, String telefono)`. Es lo mínimo que se copia al documento de Couchbase cuando se asigna (patrón *Extended Reference*, igual que el cliente).
+
+### `EstadosVistos`
+
+Clase *package-private* (solo la usa `Restaurant`). Recuerda, **en esta computadora**, el último estado que el cliente vio de cada pedido, para saber si "avanzó" desde la última vez.
+
+Usa `java.util.prefs.Preferences`: un almacén clave → valor de Java que en Windows vive en el registro (`HKEY_CURRENT_USER\Software\JavaSoft\Prefs\lecartoon\estados-vistos`) y sobrevive a cerrar la app. No toca Oracle ni Couchbase. Clave: `"idCliente.idPedido"`; valor: 1, 2 o 3.
+
+| Método `static` | Qué hace |
+|---|---|
+| `visto(idCliente, idPedido, estadoActual)` | Último estado visto. Si nunca se vio aquí, o lo guardado es mayor que el actual (la base se recreó), toma el actual como visto: así no se animan de golpe todos los pedidos viejos. |
+| `marcar(idCliente, idPedido, estado)` | Anota el estado visto. |
+
+Ambos son `synchronized` porque los llama el vigilante desde otro hilo.
+
+---
+
+## 5. Patrón State: estados del pedido
 
 ```mermaid
 stateDiagram-v2
     [*] --> Preparando: Order(...) / id_state = 1
-    Preparando --> Enviado: changeState()
-    Enviado --> Entregado: changeState()
+    Preparando --> Enviado: changeState() (lo marca el vendedor)
+    Enviado --> Entregado: changeState() (lo marca el vendedor)
     Entregado --> Entregado: changeState() no hace nada
 ```
 
@@ -309,11 +472,13 @@ stateDiagram-v2
 
 Las tres tienen constructor `(Order order)`, guardan la referencia al pedido para poder cambiar su estado y ofrecen `getOrder/setOrder` y `setColor`.
 
+**Quién avanza el estado:** el **vendedor**, desde la página web de Alan (escribe en Oracle y en Couchbase). La app del cliente solo **detecta** el cambio y llama a `changeState()` para animarlo (ver [sección 9](#9-seguimiento-y-reseñas-orderdetails)).
+
 **Por qué State:** la pantalla de seguimiento nunca pregunta "¿en qué estado está?" con `if`. Le pide al pedido su color, su GIF y su mensaje (`order.getColor()`…), y cada estado sabe los suyos. Agregar un estado nuevo, por ejemplo "Cancelado", es una clase más, no un `if` más en cada pantalla.
 
 ---
 
-## 5. Catálogo: `Dishes` y `Franchises`
+## 6. Catálogo: `Dishes` y `Franchises`
 
 ### `Dishes.Dishes` (clase base)
 
@@ -322,7 +487,7 @@ Las tres tienen constructor `(Order order)`, guardan la referencia al pedido par
 | `Dishes(String name, double price, String description, int id, String image)` | Constructor. `image` es la ruta del recurso, por ejemplo `/DishesP/Dish3.png`. |
 | `getName()`, `getPrice()`, `getDescription()`, `getId()`, `getImage()` | Lectura de los campos (`protected`). |
 
-Cada platillo es una subclase con un constructor sin parámetros que llama a `super(...)`. Por ejemplo, `new Burrito()`. **El `id` coincide con `DISHES.ID`** en la base de datos.
+Cada platillo es una subclase con un constructor sin parámetros que llama a `super(...)`. Por ejemplo, `new Burrito()`. **El `id` coincide con `PLATILLO.ID_PLATILLO`** en Oracle (1–28).
 
 | Id | Clase | Nombre | Precio | Franquicia |
 |---|---|---|---|---|
@@ -374,7 +539,7 @@ Cada platillo es una subclase con un constructor sin parámetros que llama a `su
 
 ---
 
-## 6. Persistencia (`persistence`)
+## 7. Persistencia (`persistence`)
 
 ### `ConnectionFactory`
 
@@ -382,17 +547,25 @@ Cada platillo es una subclase con un constructor sin parámetros que llama a `su
 
 | Miembro | Qué hace |
 |---|---|
-| bloque `static { … }` | Al cargar la clase, lee `db.properties` y resuelve `URL`, `USER` y `PASSWORD`. Si `db.url` no empieza con `jdbc:oracle:`, lanza `IllegalStateException`: la app solo trabaja con Oracle. |
+| bloque `static { … }` | Al cargar la clase, lee `db.properties` y resuelve `URL`, `USER`, `PASSWORD` y, en `Client_data`, `SCHEMA`. Si `db.url` no empieza con `jdbc:oracle:`, lanza `IllegalStateException`: la app solo trabaja con Oracle. |
 | *privado* `leer(Properties, String clave)` | Busca la clave en orden: **`-Dclave`** → variable de entorno **`LECARTOON_CLAVE`** (por ejemplo `db.user` → `LECARTOON_DB_USER`) → `db.properties`. |
-| **`static`** `getConnection()` | Abre la conexión con usuario y contraseña. Si no hay usuario, lanza `SQLException` pidiendo definir `LECARTOON_DB_USER` y `LECARTOON_DB_PASSWORD`. |
+| **`static`** `getConnection()` | Abre la conexión con usuario y contraseña. Si no hay usuario, lanza `SQLException` pidiendo definir `LECARTOON_DB_USER` y `LECARTOON_DB_PASSWORD`. **En `Client_data`**, si `db.schema` tiene valor y no es el mismo usuario, ejecuta `ALTER SESSION SET CURRENT_SCHEMA = <esquema>`; si eso falla, cierra la conexión antes de lanzar el error. |
 | **`static`** `describir()` | Regresa la URL. La usa `PruebaConexion`. |
+| **`static`** `usuario()` / `esquema()` | *(Client_data)* Usuario con el que entra la app y esquema donde se buscan las tablas. |
+
+**`db.properties`** solo tiene la URL de Prometeo (y en `Client_data`, `db.schema=CIB500_05`). El usuario y la contraseña **nunca** van en el repositorio, que es público.
+
+En `Client_data`, el esquema va pegado dentro del `ALTER SESSION`, así que solo se acepta un nombre válido (`[A-Z][A-Z0-9_$#]*`). Un valor como `"CIB500_05; DROP TABLE pedido"` se rechaza al arrancar.
 
 ### `DaoFactory` · *Factory*
 
 | Método | Qué hace |
 |---|---|
-| **`static`** `clientes()` | Regresa un `OracleCustomerDao`. |
-| **`static`** `pedidos()` | Regresa un `OracleOrderDao`. |
+| **`static`** `clientes()` | `OracleCustomerDao` |
+| **`static`** `pedidos()` | `OracleOrderDao` |
+| **`static`** `documentos()` | `CouchbasePedidoDocDao` |
+| **`static`** `tarjetas()` | `OracleTarjetaDao` |
+| **`static`** `direcciones()` | `OracleDireccionDao` |
 
 Es el único lugar que conoce las clases concretas: `Restaurant` y las pantallas solo ven las interfaces.
 
@@ -411,13 +584,38 @@ Es el único lugar que conoce las clases concretas: `Restaurant` y las pantallas
 | `List<Order> pedidosDe(int idCliente)` | Pedidos del cliente, del más reciente al más viejo. **Lista vacía, nunca `null`.** |
 | `List<OrderDetails> detallesDe(int idPedido)` | Renglones del pedido. |
 | `void cambiarEstado(int idPedido, int estado)` | Guarda el nuevo estado (`ID_STATUS`). |
-| `int registrar(int idCliente, double total, List<ItemPedido> items)` | Inserta el pedido y sus renglones **en una sola transacción** y regresa el id del pedido. |
+| `int registrar(int idCliente, int idDireccion, double total, List<ItemPedido> items)` | Inserta el pedido (con su dirección de entrega) y sus renglones **en una sola transacción** y regresa el id del pedido. |
 | `Resena resenaDe(int idPedido)` | Reseña del pedido; `null` si todavía no lo califican. |
 | `void calificar(int idPedido, Resena resena)` | Guarda la reseña. Solo pedidos entregados y solo una vez; si no se puede, lanza `DaoException`. |
+| `int sucursalDePedido(int idPedido)` | Sucursal asignada (la usa el documento de Couchbase). |
+| `Map<Integer, Repartidor> asignarRepartidores(int idCliente)` | A los pedidos del cliente en Enviado/Entregado sin repartidor les asigna uno de su sucursal. Regresa `id_pedido → repartidor` de los asignados en esa llamada. |
+
+### Interfaz `TarjetaDao`
+
+| Método | Contrato |
+|---|---|
+| `MetodoPago tarjetaDe(int idCliente)` | La tarjeta más reciente del cliente, o `null`. |
+| `int registrar(int idCliente, String numero, YearMonth vence, String cvv)` | Guarda una tarjeta nueva y regresa su id. |
+
+### Interfaz `DireccionDao`
+
+| Método | Contrato |
+|---|---|
+| `Direccion direccionDe(int idCliente)` | La dirección activa del cliente, o `null`. |
+| `ZonaCobertura zonaDe(String cp)` | Municipio, ciudad, estado y colonias de ese CP; `null` si no está en la zona de cobertura. |
+| `int guardar(int idCliente, int idColonia, String calle, String numExterior, String numInterior)` | Guarda una dirección **nueva** y la deja como la única del cliente. La anterior no se borra: los pedidos viejos la siguen usando. |
+
+### Interfaz `PedidoDocDao`
+
+| Método | Contrato |
+|---|---|
+| `void crear(int idPedido, Costumer cliente, int idSucursal, Direccion entrega, List<ItemPedido> items)` | Crea el documento `pedido::<id>` con el id que dio Oracle. |
+| `void calificar(int idPedido, Resena resena)` | Pone la reseña dentro del documento. |
+| `void asignarRepartidor(int idPedido, Repartidor repartidor)` | Pone el repartidor dentro del documento. |
 
 ### `DaoException`
 
-`extends RuntimeException` (*unchecked*). Constructor `DaoException(String mensaje, Throwable causa)`: el mensaje es para humanos y la causa conserva la `SQLException` original para depurar. Al ser *unchecked*, las interfaces DAO no se ensucian con `throws SQLException`, que es algo propio de JDBC.
+`extends RuntimeException` (*unchecked*). Constructor `DaoException(String mensaje, Throwable causa)`: el mensaje es para humanos y la causa conserva la `SQLException` o `CouchbaseException` original para depurar. Al ser *unchecked*, las interfaces DAO no se ensucian con `throws SQLException`, que es algo propio de JDBC.
 
 ### `persistence.oracle.OracleCustomerDao`
 
@@ -430,7 +628,7 @@ Un cliente de la app se reparte en tres tablas: `CLIENTE` (correo y contraseña)
 | `actualizarPerfil` | Transacción: `UPDATE PERSONA` y `UPDATE TELEFONO` (o `INSERT` si no tenía), llegando al `ID_PERSONA` con una subconsulta desde `ID_CLIENTE`. |
 | *privados* `separarApellidos` / `juntarApellidos` | La app maneja un solo `lastName`; se parte en el primer espacio en `APELLIDOPATERNO` y `APELLIDOMATERNO`. |
 
-Todas las consultas usan **`PreparedStatement` con `?`**: los valores nunca se concatenan al SQL, así que no hay riesgo de inyección SQL.
+Todas las consultas de todos los DAOs usan **`PreparedStatement` con `?`**: los valores nunca se concatenan al SQL, así que no hay riesgo de inyección SQL.
 
 ### `persistence.oracle.OracleOrderDao`
 
@@ -438,25 +636,97 @@ Todas las consultas usan **`PreparedStatement` con `?`**: los valores nunca se c
 |---|---|
 | `pedidosDe` | `PEDIDO` del cliente, del más nuevo al más viejo. El total no está guardado: se calcula con `SUM(cantidad × precio)` de sus renglones + `Carrito.ENVIO`. |
 | `detallesDe` | `DETALLES_PEDIDO JOIN PLATILLO` para traer el **nombre** del platillo en una sola consulta. |
-| `cambiarEstado` | `UPDATE PEDIDO SET ID_STATUS = ?, FECHA_ACTUALIZACION = SYSDATE`. Al pasar a **Enviado** asigna un repartidor de la sucursal si no tenía. |
-| `registrar` | `setAutoCommit(false)` → sucursal del cliente (`SUCURSAL_CLIENTE`, o la 1) → `insertarPedido` → `insertarDetalles` → `commit()`. Ante cualquier error hace **`rollback()`**: se guarda todo o nada. |
+| `cambiarEstado` | `UPDATE PEDIDO SET ID_STATUS = ?, FECHA_ACTUALIZACION = SYSDATE`. Al pasar a Enviado asigna un repartidor de la sucursal si no tenía. |
+| `registrar` | `setAutoCommit(false)` → `sucursalPara(idDireccion)` → `insertarPedido` (con `ID_DIRECCION`) → `insertarDetalles` → `commit()`. Ante cualquier error hace **`rollback()`**: se guarda todo o nada. |
+| *privado* `sucursalPara(Connection, idDireccion)` | **La sucursal de la misma alcaldía que la dirección de entrega.** Un `CASE` dentro del `ORDER BY` pone primero (0) las sucursales cuya alcaldía coincide y después (1) las demás; empate → menor id. Hay una sucursal por cada alcaldía de cobertura. |
+| `asignarRepartidores` | 1) `SELECT` de los pedidos del cliente con `ID_STATUS >= 2` e `ID_REPARTIDOR IS NULL`; 2) para cada uno, un repartidor de su sucursal (`ORDER BY DBMS_RANDOM.VALUE FETCH FIRST 1 ROW ONLY`) con nombre y teléfono; 3) `UPDATE PEDIDO SET ID_REPARTIDOR = ? WHERE ID_PEDIDO = ? AND ID_REPARTIDOR IS NULL`. Ese `IS NULL` evita pisar un repartidor que ya haya puesto la página del vendedor. |
+| `sucursalDePedido` | `SELECT ID_SUCURSAL FROM PEDIDO`. |
 | `resenaDe` | `SELECT CALIFICACION, RESENA, FECHA_ACTUALIZACION FROM PEDIDO`. Si `CALIFICACION` es `NULL`, regresa `null`. |
 | `calificar` | `UPDATE PEDIDO SET CALIFICACION = ?, RESENA = ?, FECHA_ACTUALIZACION = SYSDATE WHERE ID_PEDIDO = ? AND ID_STATUS = 3 AND CALIFICACION IS NULL`. Un comentario vacío se guarda como `NULL`. El *trigger* `TRG_AUD_PEDIDO` deja la reseña en `PEDIDO_H`. |
 | *privado* `insertarDetalles(Connection, …)` | Un renglón por platillo con **`addBatch()` / `executeBatch()`**: todos se mandan juntos a la base de datos. |
 
 Los métodos privados **reciben la misma `Connection`**: la transacción vive en la conexión, así que todos los `INSERT` deben usar la misma.
 
-### `PruebaConexion`
+### `persistence.oracle.OracleTarjetaDao`
 
-`main` independiente para probar la conexión configurada. Pone un *timeout* de 10 s, ejecuta `SELECT USER, SYSDATE FROM DUAL` e imprime el tiempo, el usuario, la hora del servidor, la versión de la base de datos y la del driver.
+| Método | Cómo funciona |
+|---|---|
+| `tarjetaDe` | `SELECT … SUBSTR(NUM_TARJETA, 1, 1), SUBSTR(NUM_TARJETA, -4), EXPIRACION FROM TARJETA_CLIENTE WHERE ID_CLIENTE = ? ORDER BY ID_TARJETA_CLIENTE DESC FETCH FIRST 1 ROW ONLY`. El número se recorta **dentro de Oracle**: el número completo y el CVV nunca viajan a la app. `FETCH FIRST` se aplica **después** del `ORDER BY` (`ROWNUM` no). |
+| `registrar` | `INSERT INTO TARJETA_CLIENTE (ID_CLIENTE, NUM_TARJETA, EXPIRACION, CVV)`. `EXPIRACION` se guarda como el día 1 del mes. El id lo pone el *trigger* `ID_TARJETA_CLIENTE_TRGG`. |
 
-### `PruebaClientes`
+### `persistence.oracle.OracleDireccionDao`
 
-`main` independiente que prueba `OracleCustomerDao.login` con un cliente de los datos semilla.
+La dirección está normalizada en 8 tablas (`pais → estado → ciudad → municipio → codigo_postal → colonia → calle → direccion`) y se liga al cliente por `PERSONA_DIRECCION` (vía `CLIENTE.ID_PERSONA`).
+
+**Zona de cobertura** = las filas de `CODIGO_POSTAL` + `COLONIA` que carga el script. El cliente escribe su CP, elige su colonia y escribe calle y números.
+
+| Método | Cómo funciona |
+|---|---|
+| `direccionDe` | `JOIN` de 9 tablas desde `CLIENTE` hasta `PAIS`; la más reciente (`ORDER BY ID_DIRECCION DESC FETCH FIRST 1 ROW ONLY`). |
+| `zonaDe` | `CODIGO_POSTAL JOIN COLONIA JOIN MUNICIPIO … PAIS WHERE CODIGO = ?`: una fila por colonia. Sin filas = fuera de cobertura (`null`). |
+| `guardar` | **Una transacción:** 1) `ID_PERSONA` del cliente; 2) **buscar o crear la calle** en esa colonia (`UPPER(TRIM(NOMBRE))`), así dos vecinos de "Insurgentes Sur" comparten la fila; 3) `INSERT DIRECCION`; 4) `DELETE` + `INSERT PERSONA_DIRECCION`: una sola dirección activa. La `DIRECCION` vieja se queda porque `PEDIDO.ID_DIRECCION` la sigue usando. El *trigger* de auditoría deja en `PERSONA_DIRECCION_H` un `BORRADO` y un `INSERT`. |
+
+### `persistence.couchbase.CouchbaseFactory`
+
+Conexión **única** a Couchbase Capella, a diferencia de Oracle (conexión por operación): conectar a Capella tarda segundos y `Cluster` es *thread-safe*.
+
+| Método `static` | Qué hace |
+|---|---|
+| `pedidos()` | `synchronized`. La primera vez conecta (perfil `wan-development`) y espera hasta 20 s con `waitUntilReady`, para que un error se vea aquí y no después. Regresa la `Collection` de los pedidos. |
+| `cerrar()` | Desconecta; lo llama el *shutdown hook* de `App`. |
+
+Variables: `LECARTOON_CB_URL`, `LECARTOON_CB_USER`, `LECARTOON_CB_PASSWORD`, `LECARTOON_CB_BUCKET` (obligatorias), `LECARTOON_CB_SCOPE` y `LECARTOON_CB_COLLECTION` (si faltan, `_default`). En el proyecto: `ProyectoFinal` / `lecartoon` / `pedido`.
+
+### `persistence.couchbase.CouchbasePedidoDocDao`
+
+Documento `pedido::<id de Oracle>` con el formato de Alan (`version: 1`). Fechas como texto `"dd-MM-yyyy HH:mm:ss"`, igual que la página del vendedor.
+
+```json
+{
+  "id_pedido": 42,
+  "cliente":    { "id_cliente": 6, "nombre": "Laura Gómez Pérez", "telefono": "5545678901" },
+  "repartidor": null,
+  "id_sucursal": 6,
+  "id_estado": 1,
+  "direccion":  { "pais": "México", "estado": "Ciudad de México", "ciudad": "CDMX",
+                  "municipio": "Venustiano Carranza", "cp": "15900", "colonia": "Jardín Balbuena",
+                  "calle": "Sidar y Rovirosa", "numExterior": "310", "numInterior": null },
+  "detalles":   [ { "id_platillo": 2, "nombre": "Sándwich de la Muerte", "cantidad": 2,
+                    "precio": 229.49, "observaciones": null } ],
+  "subtotal": 458.98,
+  "fechaCreacion": "12-11-2026 08:23:51",
+  "fechaActualizacion": null,
+  "resena": { "calificacion": null, "comentarios": null },
+  "version": 1
+}
+```
+
+| Patrón NoSQL | Dónde |
+|---|---|
+| **Embedding** | `detalles` van dentro del pedido: se leen siempre juntos. |
+| **Extended Reference** | Copia de `cliente`, `direccion` y `repartidor` (solo lo que muestra la página del vendedor). `precio` guarda el precio **de compra**. |
+| **Computed** | `subtotal` ya calculado (sin envío). |
+| **Schema Versioning** | `version: 1`. |
+
+| Método | Cómo funciona |
+|---|---|
+| `crear` | `insert` (no `upsert`): si la llave ya existe falla con `DocumentExistsException`, señal de un choque de ids. |
+| `calificar` | `mutateIn`: solo `resena` y `fechaActualizacion` (sub-documento, no reescribe el resto). |
+| `asignarRepartidor` | `mutateIn`: solo `repartidor` (`id_repartidor`, `nombre`, `telefono`) y `fechaActualizacion`. El estado lo pone la página del vendedor. |
+
+Para revisar los documentos: Capella → **Data Tools** → `SELECT * FROM ProyectoFinal.lecartoon.pedido USE KEYS "pedido::42";`
+
+### Pruebas de humo (`main` independientes)
+
+| Clase | Qué prueba |
+|---|---|
+| `PruebaConexion` | Conexión a Oracle con *timeout* de 10 s: tiempo, usuario, hora del servidor, versión y driver. En `Client_data` también muestra el **esquema** de las tablas y prueba la lectura de las 18 tablas que usa la app (OK o FALLA con su código ORA). |
+| `PruebaCouchbase` | Conecta a Capella, escribe y lee el documento `prueba::conexion`. |
+| `PruebaClientes` | Plantilla vacía. |
 
 ---
 
-## 7. Pantallas principales
+## 8. Pantallas principales
 
 ### `Main_Frame`: ventana principal
 
@@ -464,19 +734,32 @@ Ventana sin barra de Windows (*undecorated*) con **header** y **panel dinámico*
 
 | Método | Qué hace |
 |---|---|
-| `Main_Frame()` | Crea la ventana: `maximizar()`, header y la pantalla de inicio. |
+| `Main_Frame()` | Crea la ventana: `maximizar()`, header, la pantalla de inicio y arranca el vigilante. |
 | `showmainframe(boolean visible, Costumer c)` | Muestra u oculta la ventana. |
 | **`static`** `changeDynamicPanel(JPanel panel)` | **Navegación:** reemplaza la pantalla actual, marca la pestaña que corresponde y actualiza "Carrito (n)". |
 | **`static`** `irAMisPedidos()` | Abre el perfil directamente en el historial. |
+| **`static`** `irADireccionDesdeCarrito()` | Abre el perfil en `EditarDireccion(true)`: al guardar regresa al carrito. |
+| **`static`** `irATarjetaDesdeCarrito()` | Abre el perfil en `AgregarTarjeta(true)`: al guardar regresa al carrito. |
 | **`static`** `actualizarCarrito()` | Escribe "Carrito (n)" con `Carrito.totalUnidades()`. |
 | **`static`** `abrirCocina(String clave)` | Abre `FranchiseDetails` con la franquicia y sus platillos. Las claves son `"Regular"`, `"Adventure"`, `"Simpson"`, `"Disney"` y `"Sponge"`. |
 | *privado* `crearHeader()` | Arma el header: marca, navegación y zona derecha. Arrastrarlo mueve la ventana (si no está maximizada); el doble clic alterna entre maximizada y normal. |
 | *privado* `crearNavegacion()` | Pestañas Inicio · Cocinas ▼ · Mis pedidos · Mi perfil (`Buttons.nav`). |
 | *privado* `crearMenuCocinas()` | `JPopupMenu` con las 5 franquicias y sus logos. |
-| *privado* `crearZonaDerecha()` | Dirección de entrega, botón del carrito y botones `—` / `×`. |
+| *privado* `crearZonaDerecha()` | Espacio de la dirección (vacío desde que se quitó "Entregar en"), botón del carrito y botones `—` / `×`. |
 | *privado* `maximizar()` | Ocupa `getMaximumWindowBounds()`, el área de la pantalla **sin** la barra de tareas. |
 | *privado* `crearFranquicia(clave)` / `platillosDe(clave)` | **El catálogo.** Usa un `switch` clásico con `return`: la versión `return switch … ->` tronaba con Eclipse (VerifyError). |
 | *privado* `marcarSeccion(JPanel)` | Por el tipo de pantalla (`instanceof`) decide qué pestaña subrayar. |
+
+**El vigilante** (detección de cambios de estado)
+
+| Miembro | Qué hace |
+|---|---|
+| `CADA_MS = 10_000` | Cada cuánto revisa. |
+| **`static`** `iniciarVigilante()` / `detenerVigilante()` | Arranca un `javax.swing.Timer` al crear la ventana; se detiene al cerrar sesión. |
+| **`static`** `revisarPedidos()` | Si no hay otra revisión en curso, lanza un **`SwingWorker`**. En segundo plano: 1) `Restaurant.asignarRepartidores()` (si falla, sigue); 2) `Restaurant.pedidosConNovedades()`. De vuelta en el hilo de Swing, llama a `aplicarNovedades`. |
+| *privado* `aplicarNovedades(List<Order>)` | Si el pedido cambiado está **abierto** en `Details`, lo anima con `avanzarA`. Si no, muestra un `Toast` ("Tu pedido #N ya va en camino", sin repetir avisos) y pone **"Mis pedidos (n)"** en el header. |
+
+`SwingWorker` hace la consulta fuera del hilo de eventos para que la ventana no se congele mientras Oracle responde.
 
 ### `MainFramePanel`: inicio
 
@@ -508,7 +791,9 @@ La promo "Duplica tu antojo" baja hasta la sección de combos (`scrollRectToVisi
 
 | Miembro | Qué hace |
 |---|---|
-| `CartPanel(ArrayList<ItemPedido> lista)` | Carrito vacío: tarjeta "Tu carrito está vacío" con "Explorar cocinas". Con platillos: lista a la izquierda y resumen a la derecha (subtotal, IVA, envío, total, dirección, pago y **"Realizar pedido"**). |
+| `CartPanel(ArrayList<ItemPedido> lista)` | Carrito vacío: tarjeta "Tu carrito está vacío" con "Explorar cocinas". Con platillos: lista a la izquierda y resumen a la derecha (subtotal, IVA, envío, total, **dirección real**, **tarjeta real** y **"Realizar pedido"**). |
+| "Realizar pedido" | 1) Sin dirección → aviso y `Main_Frame.irADireccionDesdeCarrito()`. 2) Sin tarjeta o vencida → aviso y `Main_Frame.irATarjetaDesdeCarrito()`. 3) `Restaurant.registrarPedido(...)`, `Toast` "Tu pedido #id fue realizado", vacía el carrito y regresa al inicio. |
+| *privado* `textoDireccion()` / `textoMetodoPago()` | La dirección (`Direccion.texto()`) y la tarjeta (`"VISA •••• 1111"`, con "(vencida)" si aplica), o qué hacer si faltan ("… la pedimos al confirmar"). Usan la caché de `Restaurant`. |
 | *privado* `crearItemCard(item)` | Foto, nombre, primera línea de la descripción, − n + y Quitar. Muestra el importe y, si hay más de una unidad, el precio unitario. |
 | *privado* `refrescar()` | Reconstruye la pantalla completa después de cada cambio. Es más simple y seguro que actualizar cada etiqueta por separado. |
 | *privado* `dinero(double)` | Formato `$1,234.50` con `Locale es-MX`. |
@@ -561,26 +846,24 @@ Otros métodos: `setColorFondo(Color)` (en ACCION también ajusta el *hover* y e
 
 ---
 
-## 8. Seguimiento y reseñas (`OrderDetails`)
+## 9. Seguimiento y reseñas (`OrderDetails`)
 
 ### `Details`: seguimiento del pedido
 
+El cliente **ya no avanza su pedido**: lo avanza el vendedor desde su página. Cuando la app detecta el cambio (al abrir el pedido o con el vigilante), la tarjeta se **desliza** al estado nuevo.
+
 | Miembro | Qué hace |
 |---|---|
-| `Details(ArrayList<OrderDetails> renglones, Order pedido)` | Arma la pantalla y llama a `updateGraphics(pedido)`. |
-| `initialize()` | "← Mis pedidos", título, *badge* de estado, `Stepper`, tarjeta de estado (GIF, hora estimada y mensaje), tarjeta de platillos con total y el espacio para la reseña. |
-| `updateGraphics(Order)` | **Repinta todo según el estado:** fondo de la tarjeta, colores de texto (`Theme.textoSobre`), GIF, mensaje, *badge*, *stepper*, y oculta "Avanzar estado" si ya se entregó. Si el pedido está entregado, muestra la reseña. |
-| *privado* `mostrarResena(boolean entregado)` | Solo si está entregado: crea un `ResenaPanel` con la reseña guardada (o `null`) y lo que hay que hacer al enviar. |
+| `Details(ArrayList<OrderDetails> renglones, Order pedido)` | Si el pedido avanzó mientras el cliente no lo veía (`estadoVisto < estado real`), la pantalla **arranca en el estado visto** y 0.7 s después se desliza hasta el real. |
+| `initialize()` | "← Mis pedidos", título, *badge* de estado, `Stepper`, tarjeta de estado envuelta en un `PanelSwipe` (GIF, hora estimada y mensaje), tarjeta de platillos con total y el espacio para la reseña. |
+| `updateGraphics(Order)` | Repinta todo según el estado, sin animar. |
+| `avanzarA(int nuevoEstado)` | Lleva la pantalla **paso por paso** hasta ese estado. Si ya va en camino o ya está ahí, no hace nada (los avisos repetidos se ignoran). |
+| *privado* `siguientePaso()` | Un paso: `PanelSwipe.animar(…)` con el cambio `id_state + 1` → `order.changeState()` (patrón State) → `pintarEstado(order, true)`. Al llegar: marca el estado como visto, muestra un `Toast` y pide a `Main_Frame` que actualice "Mis pedidos (n)". |
+| *privado* `pintarEstado(Order, boolean animarStepper)` | Color de la tarjeta, colores de texto (`Theme.textoSobre`), GIF (escalado con `SCALE_DEFAULT` para que siga animado), mensaje, *badge* y *stepper* (de golpe o con `animarA`). Si está entregado, muestra la reseña. |
+| *privado* `mostrarResena(boolean entregado)` | Solo si está entregado: un `ResenaPanel` con la reseña guardada (o `null`) y lo que hay que hacer al enviar. |
 | *getters/setters* `getOrderlist`, `getOrder`… | — |
 
-**"Avanzar estado →"** (simulación para la demo):
-
-1. `id_state + 1`.
-2. `Restaurant.cambiarEstado(order)` lo guarda en la base de datos.
-3. **Solo si se guardó**, `order.changeState()` avanza el patrón State y se repinta.
-4. Si falla (`DaoException`), `id_state` regresa al valor anterior.
-
-**Reseñas:** viven en Oracle. `mostrarResena` pide `Restaurant.resenaDe(id)`; al enviar llama a `Restaurant.calificar(id, resena)`. Si falla (`DaoException`), muestra un aviso y regresa `false`, así `ResenaPanel` se queda en modo formulario y el cliente no pierde lo que escribió.
+**Reseñas:** `mostrarResena` pide `Restaurant.resenaDe(id)` (Oracle); al enviar llama a `Restaurant.calificar(id, resena)`, que escribe en Oracle y después en Couchbase. Si Oracle falla (`DaoException`), muestra un aviso y regresa `false`, así `ResenaPanel` se queda en modo formulario y el cliente no pierde lo que escribió.
 
 **Hora estimada:** `LocalTime.now() + 30 min`, calculada al abrir la pantalla. No se guarda en ningún lado.
 
@@ -595,7 +878,8 @@ Renglón del detalle: cantidad en un recuadro ("1×") y nombre del platillo. Con
 | Método | Qué hace |
 |---|---|
 | `Stepper()` | Tamaño preferido de 600×78. |
-| `setEstado(int idEstado, Color color)` | 1–3 y el color del estado. Los pasos cumplidos se rellenan con ✓; el actual se rellena con su número y lleva sombra; los que faltan van vacíos. |
+| `setEstado(int idEstado, Color color)` | Cambia **de golpe** (al abrir la pantalla). 1–3 y el color del estado. Los pasos cumplidos se rellenan con ✓; el actual se rellena con su número y lleva sombra; los que faltan van vacíos. |
+| `animarA(int idEstado, Color color, int duracionMs)` | Llena la barra **poco a poco** hasta el estado nuevo, con el mismo *ease-out* y la misma duración que `PanelSwipe`, para que ambos vayan parejos. |
 
 ### `Estrellas`
 
@@ -621,7 +905,7 @@ Renglón del detalle: cantidad en un recuadro ("1×") y nombre del platillo. Con
 
 ---
 
-## 9. Perfil (`ProfileScreens`)
+## 10. Perfil (`ProfileScreens`)
 
 ### `ProfileScreen`
 
@@ -629,8 +913,8 @@ Tarjeta negra del cliente arriba, menú a la izquierda y la sección elegida a l
 
 | Método | Qué hace |
 |---|---|
-| `ProfileScreen()` | Carga los pedidos (`Restaurant.misPedidos`) y abre "Información personal". |
-| **`static`** `changePanel(JPanel)` | Cambia la sección de la derecha y **marca en el menú** la opción que le corresponde. |
+| `ProfileScreen()` | Carga los pedidos (`Restaurant.misPedidos`) y abre "Información personal". El menú tiene: Información personal · Métodos de pago · **Mi dirección** · Historial de pedidos, y abajo "Cerrar sesión" (detiene el vigilante y cierra la sesión). |
+| **`static`** `changePanel(JPanel)` | Cambia la sección de la derecha y **marca en el menú** la opción que le corresponde (`AgregarTarjeta` marca "Métodos de pago"; `EditarDireccion` marca "Mi dirección"). |
 | **`static`** `costumerChanged()` | Actualiza el nombre en la tarjeta del cliente después de editar el perfil. |
 | **`static`** `orderHistory()` | Atajo para mostrar el historial. |
 | `resetButtons()` / `initOrdersPanel()` | Nada seleccionado / historial seleccionado. |
@@ -640,14 +924,16 @@ Tarjeta negra del cliente arriba, menú a la izquierda y la sección elegida a l
 
 ### Secciones
 
-| Clase | Constructor | Qué muestra | API estática |
-|---|---|---|---|
-| `Personalinfo` | `Personalinfo()` | Nombre, teléfono y correo. | `costumerChanged(Costumer)` llena los datos. |
-| `EditProfile` | `EditProfile(Costumer)` | Formulario ya lleno con los datos actuales; el correo no se puede editar. | `canEdit()`, `resetPH()` |
-| `Payment` | `Payment()` | Tarjeta "física" con el número enmascarado (`•••• 9403`), titular y vencimiento. | `changedCostumer(Costumer)` pone el titular. |
-| `Addresses` | `Addresses(String direccion)` | La dirección del registro (chip PRINCIPAL) y una dirección de ejemplo. | — |
-| `OrderHistory` | `OrderHistory(ArrayList<Order>)` | Lista de `OrderPanel`, o "Aún no tienes pedidos" con un botón para explorar. | — |
-| `OrderPanel` | `OrderPanel(Order, Container)` | Número, total, *badge* del estado y "Ver detalles →", que llama a `Restaurant.detallesDe` y abre `Details`. | — |
+| Clase | Constructor | Qué muestra |
+|---|---|---|
+| `Personalinfo` | `Personalinfo()` | Nombre, teléfono y correo. `costumerChanged(Costumer)` llena los datos. |
+| `EditProfile` | `EditProfile(Costumer)` | Formulario ya lleno con los datos actuales; el correo no se puede editar. |
+| `Payment` | `Payment()` | Lee `Restaurant.metodoPago()`. **Con tarjeta:** tarjeta "física" negra con marca, número enmascarado, titular y vencimiento; si está vencida, sello **VENCIDA** y botón "Agregar tarjeta nueva". **Sin tarjeta:** invitación y botón "Agregar tarjeta". Si Oracle no responde, un aviso. |
+| `AgregarTarjeta` | `AgregarTarjeta()` / `AgregarTarjeta(boolean volverAlCarrito)` | Número, titular (fijo, es el cliente), vence `MM/AA` y CVV en un `JPasswordField` (no se ve al escribir). Marca **todos** los campos con error a la vez. Al guardar regresa a `Payment`, o al carrito si vino de "Realizar pedido". |
+| `Addresses` | `Addresses()` | Lee `Restaurant.miDireccion()`. **Con dirección:** recuadro con calle y número grandes, colonia, CP, alcaldía y estado, chip ENTREGA y botón "Editar dirección". **Sin dirección:** "La necesitas para hacer tu primer pedido" y "Agregar dirección". |
+| `EditarDireccion` | `EditarDireccion()` / `EditarDireccion(boolean volverAlCarrito)` | **CP primero:** al llegar a 5 dígitos (con un `DocumentListener`) consulta la zona; muestra "Benito Juárez, CDMX" y llena el combo de colonias, o *"Aún no entregamos en esa zona"*. Luego calle, número exterior e interior (opcional). Al editar precarga todo. Al guardar regresa a `Addresses`, o al carrito si vino de "Realizar pedido". |
+| `OrderHistory` | `OrderHistory(ArrayList<Order>)` | Lista de `OrderPanel`, o "Aún no tienes pedidos" con un botón para explorar. |
+| `OrderPanel` | `OrderPanel(Order, Container)` | Número, total, *badge* del estado y "Ver detalles →", que llama a `Restaurant.detallesDe` y abre `Details`. |
 
 **`EditProfile.guardar()`**, paso a paso:
 
@@ -658,7 +944,7 @@ Tarjeta negra del cliente arriba, menú a la izquierda y la sección elegida a l
 
 ---
 
-## 10. Componentes de interfaz (`ui` y `ui.theme`)
+## 11. Componentes de interfaz (`ui` y `ui.theme`)
 
 ### `ui.theme.Theme`
 
@@ -710,6 +996,18 @@ Tarjeta negra del cliente arriba, menú a la izquierda y la sección elegida a l
 | **`static`** `enCache(maestra, cache, w, h)` | Reutiliza la versión escalada si el tamaño no cambió. |
 | `setConBorde(boolean)`, `tieneImagen()` | — |
 
+### `ui.PanelSwipe`
+
+`extends JPanel`. Envuelve un componente y anima sus cambios con un *swipe*: lo de antes sale por la izquierda y lo nuevo entra por la derecha.
+
+| Miembro | Qué hace |
+|---|---|
+| `PanelSwipe(JComponent contenido)` | Envuelve el contenido (en `Details`, la tarjeta del estado). |
+| `static final int DURACION_MS = 380` | Duración del deslizamiento; `Stepper.animarA` usa la misma. |
+| `animar(Runnable cambio, Runnable alTerminar)` | 1) toma una **foto** (`BufferedImage`) del contenido; 2) ejecuta `cambio`; 3) toma otra foto; 4) durante 380 ms un `javax.swing.Timer` pinta las dos fotos desplazándose con *ease-out*; 5) vuelve a pintar el contenido real (con su GIF animado) y llama a `alTerminar`. |
+
+No conoce el cambio: lo recibe como `Runnable`. Así el patrón State sigue igual y la animación es reutilizable.
+
 ### `ui.Toast`
 
 Aviso flotante abajo a la derecha que se cierra solo a los 2.5 s, o al darle clic. Solo hay uno a la vez.
@@ -723,82 +1021,104 @@ Usa un `JWindow` sin foco (no se lo roba a la app) y un `javax.swing.Timer` (cor
 
 ---
 
-## 11. Flujos completos paso a paso
+## 12. Flujos completos paso a paso
 
 ### Realizar un pedido
 
 ```mermaid
 sequenceDiagram
     actor C as Cliente
-    participant P as OrderDetails_2
-    participant K as Carrito
     participant CP as CartPanel
     participant R as Restaurant
     participant D as OracleOrderDao
     participant DB as Oracle
+    participant N as CouchbasePedidoDocDao
 
-    C->>P: elige cantidad y "Añadir al carrito"
-    P->>K: agregarAlCarrito(platillo, n)
-    P->>P: Main_Frame.actualizarCarrito() + Toast
-    C->>CP: abre el carrito y da "Realizar pedido"
-    CP->>R: registrarPedido(Carrito.totalAPagar(), items)
-    R->>R: exigirSesion() y revisa que haya items
-    R->>D: registrar(idCliente, total, items)
-    D->>DB: INSERT PEDIDO · INSERT DETALLES_PEDIDO (batch) · COMMIT
-    DB-->>D: id del pedido
-    D-->>R: id
-    R-->>CP: id
-    CP->>K: vaciar()
-    CP->>C: Toast "Tu pedido #id fue realizado" y regresa al inicio
+    C->>CP: "Realizar pedido"
+    alt sin dirección
+        CP->>C: aviso + EditarDireccion(true) → al guardar regresa al carrito
+    else sin tarjeta o vencida
+        CP->>C: aviso + AgregarTarjeta(true) → al guardar regresa al carrito
+    else todo listo
+        CP->>R: registrarPedido(Carrito.totalAPagar(), items)
+        R->>R: exigirSesion · carrito · dirección · tarjeta vigente
+        R->>D: registrar(idCliente, idDireccion, total, items)
+        D->>DB: sucursal de la misma alcaldía · INSERT PEDIDO · INSERT DETALLES (batch) · COMMIT
+        DB-->>D: id del pedido
+        D-->>R: id
+        R->>R: EstadosVistos.marcar(…, 1)
+        R->>N: crear(id, cliente, sucursal, dirección, items)
+        N-->>R: (si falla: solo "[Couchbase] … quedó solo en Oracle")
+        R-->>CP: id
+        CP->>C: Toast "Tu pedido #id fue realizado", vacía el carrito y regresa al inicio
+    end
 ```
 
-Si falla algún `INSERT`, `OracleOrderDao` hace **`rollback`** y lanza `DaoException`. `CartPanel` la atrapa, muestra el error y **no** vacía el carrito.
+Si falla algún `INSERT` en Oracle, `OracleOrderDao` hace **`rollback`** y lanza `DaoException`. `CartPanel` la atrapa, muestra el error y **no** vacía el carrito.
 
-### Avanzar el estado y reseñar
+### El vendedor avanza el pedido, se asigna repartidor y el cliente reseña
 
 ```mermaid
 sequenceDiagram
-    actor C as Cliente
-    participant D as Details
+    actor V as Vendedor (página de Alan)
+    participant DB as Oracle
+    participant CB as Couchbase
+    participant M as Main_Frame (vigilante)
     participant R as Restaurant
-    participant O as Order (State)
-    participant RP as ResenaPanel
+    participant D as Details
+    actor C as Cliente
 
-    C->>D: "Avanzar estado →"
-    D->>O: setId_state(actual + 1)
-    D->>R: cambiarEstado(order)
-    alt la base de datos lo guardó
-        D->>O: changeState()  (Preparing → Sent → Delivered)
-        D->>D: updateGraphics(order) + Toast
-    else DaoException
-        D->>O: setId_state(anterior)  (se revierte)
+    V->>DB: UPDATE PEDIDO SET ID_STATUS = 2 · COMMIT
+    V->>CB: id_estado = 2, fechaActualizacion
+    loop cada 10 s (SwingWorker)
+        M->>R: asignarRepartidores()
+        R->>DB: pedidos en Enviado sin repartidor → UPDATE ID_REPARTIDOR
+        R->>CB: mutateIn "repartidor"
+        M->>R: pedidosConNovedades()
     end
-    Note over D,RP: Al llegar a Entregado aparece ResenaPanel
-    C->>RP: elige estrellas, escribe y da "Enviar reseña"
-    RP->>RP: new Resena(estrellas, comentario, ahora)  (valida 1–5)
-    RP->>D: alEnviar.test(resena)
+    alt el pedido está abierto
+        M->>D: avanzarA(2)
+        D->>D: PanelSwipe + Stepper.animarA (Preparando → Enviado)
+    else no está abierto
+        M->>C: Toast "Tu pedido #N ya va en camino" + "Mis pedidos (1)"
+    end
+    V->>DB: ID_STATUS = 3 (Entregado)
+    M->>D: avanzarA(3) → aparece ResenaPanel
+    C->>D: estrellas + comentario → "Enviar reseña"
     D->>R: calificar(idPedido, resena)
-    R->>R: UPDATE PEDIDO (calificación y reseña)
-    D-->>RP: true  (guardada)
-    RP->>RP: mostrarLectura(resena)
+    R->>DB: UPDATE PEDIDO (calificación y reseña)
+    R->>CB: mutateIn "resena"
 ```
+
+**Probar sin la página del vendedor:** `UPDATE pedido SET id_status = 2, fecha_actualizacion = SYSDATE WHERE id_pedido = N; COMMIT;` (sin `COMMIT` la app no ve el cambio: lectura consistente).
+
+### Agregar o cambiar la dirección
+
+1. `EditarDireccion`: el cliente escribe su CP → `Restaurant.zonaDe(cp)` → `OracleDireccionDao.zonaDe` → combo de colonias.
+2. Elige colonia, escribe calle y números → `Restaurant.guardarDireccion(...)`.
+3. Si no cambió nada, no se toca Oracle. Si cambió: transacción calle (reutilizada o nueva) → `DIRECCION` nueva → `PERSONA_DIRECCION` apunta a la nueva.
+4. `Restaurant` vuelve a leer la dirección de Oracle (lo que se ve es lo que quedó guardado) y la pantalla regresa a `Addresses` o al carrito.
 
 ---
 
-## 12. Manejo de errores
+## 13. Manejo de errores
 
 | Situación | Qué pasa |
 |---|---|
-| Falla de base de datos (sin conexión, SQL inválido, llave repetida) | El DAO convierte la `SQLException` en `DaoException` con un mensaje claro. La pantalla la atrapa y muestra un `JOptionPane`; en consola queda `[DAO] mensaje -> causa`. |
-| Datos inválidos en el modelo (estrellas fuera de 1–5, carrito vacío al pedir) | `IllegalArgumentException`. Las pantallas lo evitan antes: el botón de reseña está deshabilitado y el carrito vacío muestra otra pantalla. |
+| Falla de Oracle (sin conexión, SQL inválido, llave repetida) | El DAO convierte la `SQLException` en `DaoException` con un mensaje claro. La pantalla la atrapa y muestra un `JOptionPane` o un `Toast`; en consola queda `[DAO] mensaje -> causa`. |
+| Falla de Couchbase (sin red, IP no permitida en Capella, documento inexistente) | `Restaurant` la atrapa **después** de que Oracle ya guardó: se imprime `[Couchbase] … quedó solo en Oracle` y la operación sigue. |
+| Falla en el vigilante | `[Vigilante] …` en consola; se vuelve a intentar a los 10 s. Si falla la asignación de repartidor, igual se revisan los estados. |
+| Datos inválidos en el modelo (estrellas fuera de 1–5, carrito vacío, tarjeta o dirección inválida) | `IllegalArgumentException`. Las pantallas lo evitan antes: marcan los campos en rojo y no llaman a la base de datos. |
+| Pedir sin dirección o sin tarjeta vigente | `CartPanel` manda al formulario; si otra pantalla lo intentara, `Restaurant.registrarPedido` lanza `IllegalStateException`. |
 | Acción sin sesión | `IllegalStateException` desde `Restaurant.exigirSesion()`. |
 | Campos vacíos en formularios | Se marcan en rojo con la propiedad `JComponent.outline` de FlatLaf; no se llama a la base de datos. |
 | Imagen que no existe | `Imagen` y `PromoCard` pintan un bloque gris en lugar de tronar. |
 | Sin usuario de Oracle configurado | `getConnection()` lanza `SQLException` pidiendo `LECARTOON_DB_USER` y `LECARTOON_DB_PASSWORD`; el DAO la convierte en `DaoException`. |
+| *(Client_data)* Operación sin permiso | Oracle responde `ORA-01031`; llega como `DaoException`. Una tabla sin `GRANT` responde `ORA-00942`. `PruebaConexion` muestra cuál falla. |
 
 ---
 
-## 13. Cómo extender el proyecto
+## 14. Cómo extender el proyecto
 
 ### Agregar un platillo
 
@@ -806,22 +1126,46 @@ sequenceDiagram
 2. Crea `class NuevoPlatillo extends Dishes` con `super(nombre, precio, descripcion, id, "/DishesP/DishN.png")`.
 3. Agrégalo en `Main_Frame.platillosDe(clave)`. Cuando exista `DishDao`, estos dos pasos desaparecen.
 
+### Ampliar la zona de cobertura
+
+Solo `INSERT` en Oracle, sin tocar Java: la app consulta las colonias cada vez que el cliente escribe un CP.
+
+```sql
+INSERT INTO codigo_postal (id_municipio, codigo)
+VALUES ((SELECT id_municipio FROM municipio WHERE nombre = 'Cuauhtémoc'), '06700');
+INSERT INTO colonia (id_cp, nombre)
+VALUES ((SELECT id_cp FROM codigo_postal WHERE codigo = '06700'), 'Roma Norte');
+COMMIT;
+```
+
+Primero el CP y después la colonia (`COLONIA.ID_CP` es FK). Si la alcaldía es nueva, agrega también una **sucursal con su gerente y su repartidor** (ver `sucursales_faltantes.sql`): la sucursal se elige por alcaldía y el repartidor sale de esa sucursal.
+
 ### Agregar una pantalla
 
 1. Crea un `JPanel` con `BorderLayout`. Si el contenido es largo, mételo en un `Lienzo` dentro de `Theme.scroll(...)`.
 2. Usa `Tarjeta`, `Buttons.*`, `Theme.etiqueta` y `Grilla` para mantener el estilo.
 3. Navega con `Main_Frame.changeDynamicPanel(new MiPantalla())`. Si debe marcar una pestaña, agrégala en `Main_Frame.marcarSeccion`.
 
+### Agregar otra copia en Couchbase
+
+Agrega el método a `PedidoDocDao`, impleméntalo en `CouchbasePedidoDocDao` con `mutateIn` (sub-documento) y llámalo desde `Restaurant` **después** de Oracle, dentro de un `try/catch (DaoException)` que solo registre el error.
+
 ---
 
-## 14. Mejoras conocidas
+## 15. Mejoras conocidas
 
-| Tema | Detalle | Tarea |
-|---|---|---|
-| Contraseñas en texto plano | `CLIENTE.CONTRASEÑA` y `login` comparan el texto tal cual. | s01 (PBKDF2) |
-| Carrito al cerrar sesión | `Carrito` es `static` y `cerrarSesion()` no lo vacía: si otro usuario inicia sesión en la misma ejecución, ve el carrito anterior. | Por asignar |
-| Estado `static` en pantallas | `Main_Frame`, `ProfileScreen`, `Personalinfo` y `Payment` usan campos `static` para comunicarse entre pantallas. Funciona porque solo hay una ventana a la vez. | t25 |
-| Catálogo en código | Platillos y franquicias son clases; deberían leerse de la base de datos. | t22 / o03 |
-| Código sin uso | `PromoCard_GIF` (lo reemplazó el GIF de `Details`) y la dependencia `jgoodies-forms` del `pom.xml`. | t25 |
-| Nombres heredados | Paquete `Dishes` con mayúscula, `Buñuelos.java` con ñ, `Costumer` y `setAddress1`. | t25 |
-| Total calculado con el precio actual | `PEDIDO` no guarda el total ni el precio unitario: si cambia el precio de un platillo, cambian los totales de pedidos viejos. | Esquema |
+| Tema | Detalle |
+|---|---|
+| Contraseñas en texto plano | `CLIENTE.CONTRASEÑA` y `login` comparan el texto tal cual (s01: PBKDF2). |
+| CVV y número completo en Oracle | `TARJETA_CLIENTE` guarda ambos (el esquema los exige `NOT NULL`). La app nunca los lee: solo `SUBSTR` de 1 y de los últimos 4 dígitos. |
+| Repartidor asignado desde la app | Es una **simulación**: el repartidor se asigna cuando la app del cliente está abierta. En producción lo haría la página del vendedor o un *trigger* `BEFORE UPDATE OF ID_STATUS`. |
+| La página del vendedor y el documento | Si la página reemplaza el documento completo al marcar Enviado, borra el `repartidor` que pone la app; debe actualizar solo `id_estado` y `fechaActualizacion`. |
+| Mismo usuario de Couchbase en ambas ramas | `Client_data` separa permisos en Oracle, pero en Capella la app usa el mismo usuario de *Database Access*. |
+| Correo repetido al registrarse | El DAO ya distingue `ORA-00001`, pero `Register_Window` muestra un mensaje genérico (t27). |
+| Carrito al cerrar sesión | `Carrito` es `static` y `cerrarSesion()` no lo vacía: si otro usuario inicia sesión en la misma ejecución, ve el carrito anterior. |
+| Estado `static` en pantallas | `Main_Frame`, `ProfileScreen`, `Personalinfo` y `Payment` usan campos `static` para comunicarse entre pantallas. Funciona porque solo hay una ventana a la vez (t25). |
+| Catálogo en código | Platillos y franquicias son clases; deberían leerse de la base de datos (t22). El nombre del platillo en el documento de Couchbase sale de Java ("Sándwich…") y puede diferir del de Oracle. |
+| Código sin uso | `PromoCard_GIF`, `PruebaClientes`, `Restaurant.cambiarEstado`, la tabla `SUCURSAL_CLIENTE` (ya no decide la sucursal) y la dependencia `jgoodies-forms` del `pom.xml` (t25). |
+| Nombres heredados | Paquete `Dishes` con mayúscula, `Buñuelos.java` con ñ, `Costumer`, `setAddress1` y el campo `address` (t25). |
+| Total calculado con el precio actual | `PEDIDO` no guarda el total ni el precio unitario: si cambia el precio de un platillo, cambian los totales de pedidos viejos en Oracle. El documento de Couchbase sí guarda el precio de compra. |
+| Fechas en Couchbase | Los documentos creados antes del cambio tienen `yyyy-MM-dd`; los nuevos, `dd-MM-yyyy`. |
