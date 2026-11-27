@@ -4,3 +4,36 @@ target/
 
 # Archivos que genera la app
 texto.txt
+
+# --- Secretos y configuracion local (el repo es publico) ---
+.env
+.env.*
+!.env.example
+*.local.properties
+# Run Configurations de Eclipse compartidas: guardan variables de entorno (contrasenas incluidas)
+*.launch
+
+# --- Bases de datos locales ---
+*.db
+*.sqlite
+*.sqlite3
+
+# --- Llaves y certificados ---
+*.pem
+*.key
+*.jks
+*.p12
+*.pfx
+
+# --- Logs y archivos del sistema ---
+*.log
+hs_err_pid*
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Otros IDEs ---
+.idea/
+*.iml
+.vscode/
+bin/
