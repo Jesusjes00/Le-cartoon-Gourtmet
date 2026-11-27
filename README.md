@@ -384,9 +384,9 @@ Estilo **neo-brutalista**: bordes gruesos, sombras duras sin desenfoque, esquina
 | Integrante | Participación |
 |---|---|
 | **Jesús Eduardo Jiménez García** | Aplicación Java: capa de datos, integración con Oracle y Couchbase, interfaz |
-| **Alan Chávez** | Esquema de Oracle y Couchbase, página web de vendedores |
-| **Ángel Hernández** | *(por completar)* |
-| **Brenda** | *(por completar)* |
+| **Alan Chávez Canales** | Esquema de Oracle y Couchbase, página web de vendedores |
+| **Ángel Arael Hernández López** | Diseño conceptual y documentación del proyecto presentado en la universidad |
+| **Brenda Paola Alonso Tellez** | Diseño conceptual y documentación del proyecto presentado en la universidad |
 
 Universidad La Salle México · Ingeniería en Cibernética · *Diseño y Programación de Bases de Datos* · 2026
 
