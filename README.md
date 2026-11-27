@@ -48,7 +48,7 @@ Este semestre se retomó como **proyecto final de *Diseño y Programación de Ba
 - **Una página web para empleados** que consulta las reseñas.
 - Todo el acceso a datos aislado detrás de **interfaces DAO**, para que cambiar de motor no obligue a tocar las pantallas.
 
-> Rama de trabajo: **`data`**.
+> Rama principal: **`main`**. La app entra a Oracle en modo **dueño** o **cliente** según el usuario configurado (ver la [referencia técnica, sección 3](docs/REFERENCIA_TECNICA.md#3-datos-oracle-couchbase-y-los-dos-modos-de-conexión)).
 
 ---
 

@@ -5,14 +5,18 @@ Documentación clase por clase del código: qué hace cada clase o interfaz, sus
 > Para la visión general (capturas, instalación y configuración) ve al [README](../README.md).
 > Convención: en las tablas, **`static`** indica método de clase. Los métodos privados solo se mencionan cuando explican cómo funciona algo.
 
-**Ramas del repositorio**
+**Modos de conexión a Oracle**
 
-| Rama | Con qué usuario entra la app a Oracle | Para qué |
+El mismo código funciona en dos modos. No hay que cambiar de rama: lo decide el usuario que pongas en `LECARTOON_DB_USER`.
+
+| Modo | Usuario (`LECARTOON_DB_USER`) | Para qué |
 |---|---|---|
-| `data` | `CIB500_05` (dueño de las tablas, el esquema de Alan) | Versión estable. |
-| `Client_data` | `CIB500_14` (cuenta **cliente**, con los permisos de la matriz de seguridad) | La app se comporta como cliente real. El SQL de los DAOs es idéntico; solo cambia `ConnectionFactory` (ver [sección 3](#3-datos-oracle-couchbase-y-las-dos-ramas)). |
+| Dueño | `CIB500_05` (dueño de las tablas, el esquema de Alan) | Desarrollo y pruebas: tiene todos los permisos sobre sus tablas. |
+| Cliente | `CIB500_14` (cuenta **cliente**, con los permisos de la matriz de seguridad) | La app se comporta como cliente real, con **mínimo privilegio**. El SQL de los DAOs es idéntico; solo cambia lo que hace `ConnectionFactory` al abrir la conexión (ver [sección 3](#3-datos-oracle-couchbase-y-los-dos-modos-de-conexión)). |
 
-Este documento sirve para las dos ramas; donde algo solo aplica a `Client_data` se indica.
+Donde algo solo aplica al modo cliente se indica.
+
+> Historia: el modo cliente nació en la rama `Client_data` y se integró a `main` en el commit `4f48321`.
 
 ---
 
@@ -20,7 +24,7 @@ Este documento sirve para las dos ramas; donde algo solo aplica a `Client_data` 
 
 1. [Cómo arranca la app](#1-cómo-arranca-la-app)
 2. [Mapa de paquetes](#2-mapa-de-paquetes)
-3. [Datos: Oracle, Couchbase y las dos ramas](#3-datos-oracle-couchbase-y-las-dos-ramas)
+3. [Datos: Oracle, Couchbase y los dos modos de conexión](#3-datos-oracle-couchbase-y-los-dos-modos-de-conexión)
 4. [Núcleo del negocio](#4-núcleo-del-negocio-restaurante_completolecartoon_original)
 5. [Patrón State: estados del pedido](#5-patrón-state-estados-del-pedido)
 6. [Catálogo: `Dishes` y `Franchises`](#6-catálogo-dishes-y-franchises)
@@ -165,7 +169,7 @@ classDiagram
 
 ---
 
-## 3. Datos: Oracle, Couchbase y las dos ramas
+## 3. Datos: Oracle, Couchbase y los dos modos de conexión
 
 **Oracle 19c (Prometeo) es la fuente de verdad.** Clientes, direcciones, tarjetas, pedidos, renglones, reseñas y repartidores viven ahí, en el esquema de Alan (`CIB500_05`).
 
@@ -180,13 +184,15 @@ classDiagram
 | Asignar repartidor | `UPDATE PEDIDO SET ID_REPARTIDOR` | `mutateIn`: `repartidor` y `fechaActualizacion` |
 | Avanzar estado | Lo hace la **página del vendedor** | Lo hace la **página del vendedor** |
 
-**Rama `Client_data`: la app entra como cliente**
+**Modo cliente: la app entra con la cuenta cliente**
 
-En `Client_data` la app se conecta con `CIB500_14`, la cuenta **cliente** de la matriz de seguridad. Las tablas siguen siendo de `CIB500_05`. Para no reescribir el SQL, `ConnectionFactory` ejecuta al abrir cada conexión:
+En modo cliente (`LECARTOON_DB_USER=CIB500_14`) la app se conecta con `CIB500_14`, la cuenta **cliente** de la matriz de seguridad. Las tablas siguen siendo de `CIB500_05`. Para no reescribir el SQL, `ConnectionFactory` ejecuta al abrir cada conexión:
 
 ```sql
 ALTER SESSION SET CURRENT_SCHEMA = CIB500_05
 ```
+
+En modo dueño no se ejecuta: `db.schema` (`CIB500_05`) es igual al usuario, así que `ConnectionFactory` se lo salta.
 
 `CURRENT_SCHEMA` solo cambia **dónde busca Oracle los nombres sin prefijo** (`pedido` → `CIB500_05.pedido`); los **permisos** se siguen revisando como `CIB500_14`. Todo lo que hace la app está cubierto por los `GRANT` del script de seguridad:
 
@@ -547,15 +553,15 @@ Cada platillo es una subclase con un constructor sin parámetros que llama a `su
 
 | Miembro | Qué hace |
 |---|---|
-| bloque `static { … }` | Al cargar la clase, lee `db.properties` y resuelve `URL`, `USER`, `PASSWORD` y, en `Client_data`, `SCHEMA`. Si `db.url` no empieza con `jdbc:oracle:`, lanza `IllegalStateException`: la app solo trabaja con Oracle. |
+| bloque `static { … }` | Al cargar la clase, lee `db.properties` y resuelve `URL`, `USER`, `PASSWORD` y `SCHEMA` (este último validado, ver abajo). Si `db.url` no empieza con `jdbc:oracle:`, lanza `IllegalStateException`: la app solo trabaja con Oracle. |
 | *privado* `leer(Properties, String clave)` | Busca la clave en orden: **`-Dclave`** → variable de entorno **`LECARTOON_CLAVE`** (por ejemplo `db.user` → `LECARTOON_DB_USER`) → `db.properties`. |
-| **`static`** `getConnection()` | Abre la conexión con usuario y contraseña. Si no hay usuario, lanza `SQLException` pidiendo definir `LECARTOON_DB_USER` y `LECARTOON_DB_PASSWORD`. **En `Client_data`**, si `db.schema` tiene valor y no es el mismo usuario, ejecuta `ALTER SESSION SET CURRENT_SCHEMA = <esquema>`; si eso falla, cierra la conexión antes de lanzar el error. |
+| **`static`** `getConnection()` | Abre la conexión con usuario y contraseña. Si no hay usuario, lanza `SQLException` pidiendo definir `LECARTOON_DB_USER` y `LECARTOON_DB_PASSWORD`. Si `db.schema` tiene valor y no es el mismo usuario (modo cliente), ejecuta `ALTER SESSION SET CURRENT_SCHEMA = <esquema>`; si eso falla, cierra la conexión antes de lanzar el error. |
 | **`static`** `describir()` | Regresa la URL. La usa `PruebaConexion`. |
-| **`static`** `usuario()` / `esquema()` | *(Client_data)* Usuario con el que entra la app y esquema donde se buscan las tablas. |
+| **`static`** `usuario()` / `esquema()` | Usuario con el que entra la app y esquema donde se buscan las tablas. |
 
-**`db.properties`** solo tiene la URL de Prometeo (y en `Client_data`, `db.schema=CIB500_05`). El usuario y la contraseña **nunca** van en el repositorio, que es público.
+**`db.properties`** solo tiene la URL de Prometeo y `db.schema=CIB500_05` (el nombre del esquema, que no es secreto). El usuario y la contraseña **nunca** van en el repositorio, que es público.
 
-En `Client_data`, el esquema va pegado dentro del `ALTER SESSION`, así que solo se acepta un nombre válido (`[A-Z][A-Z0-9_$#]*`). Un valor como `"CIB500_05; DROP TABLE pedido"` se rechaza al arrancar.
+El esquema va pegado dentro del `ALTER SESSION`, así que solo se acepta un nombre válido (`[A-Z][A-Z0-9_$#]*`). Un valor como `"CIB500_05; DROP TABLE pedido"` se rechaza al arrancar.
 
 ### `DaoFactory` · *Factory*
 
@@ -720,7 +726,7 @@ Para revisar los documentos: Capella → **Data Tools** → `SELECT * FROM Proye
 
 | Clase | Qué prueba |
 |---|---|
-| `PruebaConexion` | Conexión a Oracle con *timeout* de 10 s: tiempo, usuario, hora del servidor, versión y driver. En `Client_data` también muestra el **esquema** de las tablas y prueba la lectura de las 18 tablas que usa la app (OK o FALLA con su código ORA). |
+| `PruebaConexion` | Conexión a Oracle con *timeout* de 10 s: tiempo, usuario, hora del servidor, versión y driver. También muestra el **esquema** de las tablas y prueba, con el usuario actual, la lectura de las 18 tablas que usa la app (OK o FALLA con su código ORA). |
 | `PruebaCouchbase` | Conecta a Capella, escribe y lee el documento `prueba::conexion`. |
 | `PruebaClientes` | Plantilla vacía. |
 
@@ -1114,7 +1120,7 @@ sequenceDiagram
 | Campos vacíos en formularios | Se marcan en rojo con la propiedad `JComponent.outline` de FlatLaf; no se llama a la base de datos. |
 | Imagen que no existe | `Imagen` y `PromoCard` pintan un bloque gris en lugar de tronar. |
 | Sin usuario de Oracle configurado | `getConnection()` lanza `SQLException` pidiendo `LECARTOON_DB_USER` y `LECARTOON_DB_PASSWORD`; el DAO la convierte en `DaoException`. |
-| *(Client_data)* Operación sin permiso | Oracle responde `ORA-01031`; llega como `DaoException`. Una tabla sin `GRANT` responde `ORA-00942`. `PruebaConexion` muestra cuál falla. |
+| *(Modo cliente)* Operación sin permiso | Oracle responde `ORA-01031`; llega como `DaoException`. Una tabla sin `GRANT` responde `ORA-00942`. `PruebaConexion` muestra cuál falla. |
 
 ---
 
@@ -1160,7 +1166,7 @@ Agrega el método a `PedidoDocDao`, impleméntalo en `CouchbasePedidoDocDao` con
 | CVV y número completo en Oracle | `TARJETA_CLIENTE` guarda ambos (el esquema los exige `NOT NULL`). La app nunca los lee: solo `SUBSTR` de 1 y de los últimos 4 dígitos. |
 | Repartidor asignado desde la app | Es una **simulación**: el repartidor se asigna cuando la app del cliente está abierta. En producción lo haría la página del vendedor o un *trigger* `BEFORE UPDATE OF ID_STATUS`. |
 | La página del vendedor y el documento | Si la página reemplaza el documento completo al marcar Enviado, borra el `repartidor` que pone la app; debe actualizar solo `id_estado` y `fechaActualizacion`. |
-| Mismo usuario de Couchbase en ambas ramas | `Client_data` separa permisos en Oracle, pero en Capella la app usa el mismo usuario de *Database Access*. |
+| Mismo usuario de Couchbase en ambos modos | El modo cliente separa permisos en Oracle, pero en Capella la app usa el mismo usuario de *Database Access*. |
 | Correo repetido al registrarse | El DAO ya distingue `ORA-00001`, pero `Register_Window` muestra un mensaje genérico (t27). |
 | Carrito al cerrar sesión | `Carrito` es `static` y `cerrarSesion()` no lo vacía: si otro usuario inicia sesión en la misma ejecución, ve el carrito anterior. |
 | Estado `static` en pantallas | `Main_Frame`, `ProfileScreen`, `Personalinfo` y `Payment` usan campos `static` para comunicarse entre pantallas. Funciona porque solo hay una ventana a la vez (t25). |
